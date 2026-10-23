@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import {
   Activity,
   Bot,
-  ChevronLeft,
   Copy,
   FolderSync,
   Info,
@@ -17,13 +16,13 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { brand } from "@/app/brand";
 import { defaultSettings, getAppMetadata, getSanitizedDiagnostics, type AppMetadata, type SettingsSection } from "@/features/settings/settingsBridge";
 import { CredentialVaultSettings } from "@/features/settings/CredentialVaultSettings";
+import { UpdatePanel } from "@/features/updater/UpdatePanel";
 import { useSettingsStore } from "@/features/settings/settingsStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 type SettingsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialView?: "settings" | "about";
 };
 
 const navigation: { id: SettingsSection | "about"; label: string; icon: typeof Settings2 }[] = [
@@ -34,6 +33,7 @@ const navigation: { id: SettingsSection | "about"; label: string; icon: typeof S
   { id: "monitoring", label: "服务器监控", icon: Activity },
   { id: "aiPrivacy", label: "AI 与隐私", icon: Bot },
   { id: "appearance", label: "外观与快捷键", icon: Palette },
+  { id: "about", label: "关于 TermVista", icon: Info },
 ];
 
 function SettingRow({
@@ -88,9 +88,8 @@ function SettingValue({ children }: { children: ReactNode }) {
   return <span className="rounded-sm border border-border bg-muted/40 px-2 py-1 text-[10px] text-muted-foreground">{children}</span>;
 }
 
-export function SettingsDialog({ open, onOpenChange, initialView = "settings" }: SettingsDialogProps) {
-  const [view, setView] = useState<"settings" | "about">(initialView);
-  const [section, setSection] = useState<SettingsSection>("general");
+export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
+  const [section, setSection] = useState<SettingsSection | "about">("general");
   const settings = useSettingsStore((state) => state.settings);
   const loaded = useSettingsStore((state) => state.loaded);
   const loading = useSettingsStore((state) => state.loading);
@@ -105,9 +104,9 @@ export function SettingsDialog({ open, onOpenChange, initialView = "settings" }:
   const setAiOpen = useWorkspaceStore((state) => state.setAiOpen);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
-    if (!nextOpen) setView(initialView);
+    if (!nextOpen && section === "about") setSection("general");
     onOpenChange(nextOpen);
-  }, [initialView, onOpenChange]);
+  }, [section, onOpenChange]);
   const closeDialog = useCallback(() => handleOpenChange(false), [handleOpenChange]);
 
   useEffect(() => {
@@ -115,7 +114,7 @@ export function SettingsDialog({ open, onOpenChange, initialView = "settings" }:
   }, [open, loaded, loading, load]);
 
   useEffect(() => {
-    if (!open || view !== "about") return;
+    if (!open || section !== "about") return;
     let current = true;
     void getAppMetadata().then((value) => {
       if (current) {
@@ -126,7 +125,7 @@ export function SettingsDialog({ open, onOpenChange, initialView = "settings" }:
       if (current) setMetadataError(error instanceof Error ? error.message : String(error));
     });
     return () => { current = false; };
-  }, [open, view]);
+  }, [open, section]);
 
   const updateSetting = useCallback(async <T extends "general" | "terminal" | "connections" | "monitoring" | "appearance",>(target: T, patch: Partial<typeof settings[T]>) => {
     try {
@@ -148,7 +147,7 @@ export function SettingsDialog({ open, onOpenChange, initialView = "settings" }:
 
   const resetAvailable = section === "general" || section === "terminal" || section === "connections" || section === "monitoring" || section === "appearance";
   const currentLabel = navigation.find((item) => item.id === section)?.label ?? "设置";
-  const copyDiagnostics = async () => {
+  const copyDiagnostics = useCallback(async () => {
     try {
       const info = await getSanitizedDiagnostics();
       await navigator.clipboard.writeText(JSON.stringify(info, null, 2));
@@ -156,7 +155,7 @@ export function SettingsDialog({ open, onOpenChange, initialView = "settings" }:
     } catch {
       toast.error("无法复制诊断信息，请检查系统剪贴板权限。");
     }
-  };
+  }, []);
 
   const settingsBody = useMemo(() => {
     if (!loaded) return <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">{loading ? "正在读取设置…" : "设置尚未加载。"}</div>;
@@ -167,6 +166,7 @@ export function SettingsDialog({ open, onOpenChange, initialView = "settings" }:
           <SettingRow title="恢复上次标签与工作区" description="仅恢复本机标签、面板布局和 SFTP 上次路径；远端进程不会恢复。" value={settings.general.restoreLastTabs ? "开启" : "关闭"} defaultValue="开启" timing="下次启动" control={<Toggle checked={settings.general.restoreLastTabs} label="恢复上次标签与工作区" onChange={(value) => void updateSetting("general", { restoreLastTabs: value })} />} />
           <SettingRow title="自动连接恢复的服务器标签" description="仅处理上次工作区内的 SSH 标签。首次主机指纹验证、缺少凭据和登录确认仍按原安全流程执行。" value={settings.general.autoConnectSavedHosts ? "开启" : "关闭"} defaultValue="关闭" timing="下次启动" control={<Toggle checked={settings.general.autoConnectSavedHosts} label="自动连接恢复的服务器标签" onChange={(value) => void updateSetting("general", { autoConnectSavedHosts: value })} />} />
           <SettingRow title="维护最近连接" description="关闭后不写入新的最近连接时间；现有连接配置、收藏、凭据和可信指纹不会被删除。" value={settings.general.rememberRecentConnections ? "开启" : "关闭"} defaultValue="开启" timing="立即" control={<Toggle checked={settings.general.rememberRecentConnections} label="维护最近连接" onChange={(value) => void updateSetting("general", { rememberRecentConnections: value })} />} />
+          <SettingRow title="启动后检查更新" description="应用初始化后在后台检查；只有发现更新时显示非阻断通知，不会自动下载或安装。" value={settings.general.autoCheckUpdates ? "开启" : "关闭"} defaultValue="开启" timing="下次启动" control={<Toggle checked={settings.general.autoCheckUpdates} label="启动后检查更新" onChange={(value) => void updateSetting("general", { autoCheckUpdates: value })} />} />
           <SettingRow title="新标签页" description="当前新标签页使用快速连接首页。" value="快速连接" defaultValue="快速连接" timing="立即" control={<SettingValue>快速连接</SettingValue>} />
           <SettingRow title="界面语言" description="当前版本提供完整简体中文界面；未提供未完成的语言切换。" value="简体中文" defaultValue="简体中文" timing="当前版本" control={<SettingValue>简体中文</SettingValue>} />
         </>;
@@ -233,65 +233,58 @@ export function SettingsDialog({ open, onOpenChange, initialView = "settings" }:
             <p className="mt-2 text-[9px] text-muted-foreground">快捷键可查看；本版本未提供热键编辑，避免显示无效输入控件。</p>
           </div>
         </>;
+      case "about":
+        return <>
+          <SectionHeading title={`关于 ${brand.name}`} description="产品信息与当前运行版本。" />
+          <div className="flex flex-col items-center pt-3 text-center">
+            <img src="/termvista-icon-v2.png" alt="TermVista 图标" className="h-20 w-20 rounded-xl border border-border bg-white p-1 shadow-sm" />
+            <h2 className="mt-3 text-[18px] font-semibold tracking-tight text-foreground">{brand.name} <span className="font-normal text-muted-foreground">{brand.nameZh}</span></h2>
+            <p className="mt-1 text-[10px] text-muted-foreground">{brand.englishDescription}</p>
+            <p className="mt-2 max-w-[460px] text-[10px] leading-5 text-muted-foreground">{brand.description}</p>
+            <p className="mt-1 text-[10px] text-primary">{brand.tagline}</p>
+          </div>
+          <div className="mx-auto mt-5 grid max-w-[430px] grid-cols-[108px_1fr] gap-y-2 rounded-sm border border-border bg-muted/25 p-3 text-[10px] text-foreground">
+            <span className="text-muted-foreground">版本</span><span>{metadata ? metadata.version : metadataError ? "无法读取" : "正在读取…"}</span>
+            <span className="text-muted-foreground">运行平台</span><span>{metadata ? `${metadata.platform} · ${metadata.arch}` : "—"}</span>
+            {metadata?.channel && <><span className="text-muted-foreground">发布通道</span><span>{metadata.channel}</span></>}
+            {metadata?.buildHash && <><span className="text-muted-foreground">构建标识</span><span className="font-mono">{metadata.buildHash}</span></>}
+            <span className="text-muted-foreground">更新服务</span><span>{metadata?.updaterConfigured ? "已配置" : metadata?.updaterConfigReason ?? "正在检查配置…"}</span>
+          </div>
+          {metadataError && <p role="alert" className="mt-2 text-center text-[10px] text-destructive">应用信息读取失败：{metadataError}</p>}
+          <div className="mx-auto mt-4 w-full max-w-[560px]">
+            <UpdatePanel metadata={metadata} />
+          </div>
+          <div className="mt-3 flex justify-center">
+            <Button type="button" variant="outline" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void copyDiagnostics()}><Copy size={12} />复制脱敏诊断信息</Button>
+          </div>
+          <p className="mt-3 text-center text-[9px] text-muted-foreground">{brand.fullName} · {brand.protocols}</p>
+        </>;
     }
-  }, [loaded, loading, section, settings, setManagerView, setManagerOpen, setAiOpen, closeDialog, updateSetting]);
+  }, [loaded, loading, section, settings, metadata, metadataError, setManagerView, setManagerOpen, setAiOpen, closeDialog, updateSetting, copyDiagnostics]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className={view === "about" ? "flex h-[min(540px,90vh)] w-[min(640px,92vw)] flex-col gap-0 p-0" : "flex h-[min(700px,90vh)] w-[min(980px,92vw)] flex-col gap-0 p-0"}>
+      <DialogContent className="flex h-[min(700px,90vh)] w-[min(980px,92vw)] flex-col gap-0 p-0">
         <DialogDescription className="sr-only">管理应用偏好与安全选项。SSH 登录凭据由本机加密保险库保护。</DialogDescription>
-        {view === "settings" ? <>
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-panel-header px-4">
-            <img src="/termvista-icon-v2.png" alt="" className="h-6 w-6 rounded-sm" />
-            <DialogTitle>{brand.name} 设置</DialogTitle>
-          </header>
-          <div className="flex min-h-0 flex-1">
-            <nav aria-label="设置分类" className="flex w-[210px] shrink-0 flex-col border-r border-border bg-panel-header/60 p-2">
-              <div className="grid gap-0.5">
-                {navigation.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setSection(id as SettingsSection)} aria-current={section === id ? "page" : undefined} className={`flex h-8 items-center gap-2 rounded-sm px-2 text-left text-[10px] transition-colors ${section === id ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}><Icon size={13} />{label}</button>)}
-              </div>
-              <div className="mt-auto border-t border-border pt-2">
-                <button type="button" onClick={() => setView("about")} className="flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"><Info size={13} />关于 TermVista</button>
-              </div>
-            </nav>
-            <main className="compact-scrollbar min-w-0 flex-1 overflow-y-auto px-5 py-4" aria-label={`${currentLabel}设置`}>
-              {settingsError && <div role="alert" className="mb-3 rounded-sm border border-destructive/40 bg-destructive/5 px-3 py-2 text-[10px] text-destructive">保存失败，界面保留原值：{settingsError}</div>}
-              {settingsBody}
-            </main>
-          </div>
-          <footer className="flex h-12 shrink-0 items-center justify-between border-t border-border bg-panel-header/50 px-4">
-            <Button type="button" variant="ghost" size="sm" disabled={!resetAvailable || savingSection !== null} className="h-7 rounded-sm text-[10px]" onClick={() => void resetCurrentSection()}>恢复默认（{currentLabel}）</Button>
-            <Button type="button" variant="outline" size="sm" className="h-7 rounded-sm text-[10px]" onClick={closeDialog}>关闭</Button>
-          </footer>
-        </> : <>
-          <header className="flex h-12 shrink-0 items-center border-b border-border bg-panel-header px-3">
-            <Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2 text-[10px]" onClick={() => setView("settings")}><ChevronLeft size={13} />返回设置</Button>
-            <DialogTitle className="ml-2">关于 TermVista</DialogTitle>
-            <Button type="button" variant="ghost" size="icon" className="ml-auto h-7 w-7" aria-label="关闭关于窗口" onClick={closeDialog}>×</Button>
-          </header>
-          <main className="compact-scrollbar min-h-0 flex-1 overflow-y-auto p-6">
-            <div className="flex flex-col items-center text-center">
-              <img src="/termvista-icon-v2.png" alt="TermVista 图标" className="h-[88px] w-[88px] rounded-xl border border-border bg-white p-1 shadow-sm" />
-              <h2 className="mt-3 text-[21px] font-semibold tracking-tight text-foreground">{brand.name} <span className="font-normal text-muted-foreground">{brand.nameZh}</span></h2>
-              <p className="mt-1 text-[10px] text-muted-foreground">{brand.englishDescription}</p>
-              <p className="mt-2 max-w-[460px] text-[10px] leading-5 text-muted-foreground">{brand.description}</p>
-              <p className="mt-1 text-[10px] text-primary">{brand.tagline}</p>
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-panel-header px-4">
+          <img src="/termvista-icon-v2.png" alt="" className="h-6 w-6 rounded-sm" />
+          <DialogTitle>{brand.name} 设置</DialogTitle>
+        </header>
+        <div className="flex min-h-0 flex-1">
+          <nav aria-label="设置分类" className="flex w-[210px] shrink-0 flex-col border-r border-border bg-panel-header/60 p-2">
+            <div className="grid gap-0.5">
+              {navigation.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setSection(id)} aria-current={section === id ? "page" : undefined} className={`flex h-8 items-center gap-2 rounded-sm px-2 text-left text-[10px] transition-colors ${section === id ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}><Icon size={13} />{label}</button>)}
             </div>
-            <div className="mx-auto mt-5 grid max-w-[430px] grid-cols-[108px_1fr] gap-y-2 rounded-sm border border-border bg-muted/25 p-3 text-[10px] text-foreground">
-              <span className="text-muted-foreground">版本</span><span>{metadata ? metadata.version : metadataError ? "无法读取" : "正在读取…"}</span>
-              <span className="text-muted-foreground">运行平台</span><span>{metadata ? `${metadata.platform} · ${metadata.arch}` : "—"}</span>
-              {metadata?.channel && <><span className="text-muted-foreground">发布通道</span><span>{metadata.channel}</span></>}
-              {metadata?.buildHash && <><span className="text-muted-foreground">构建标识</span><span className="font-mono">{metadata.buildHash}</span></>}
-              <span className="text-muted-foreground">更新服务</span><span>{metadata?.updaterConfigured ? "已配置" : "尚未配置更新服务"}</span>
-            </div>
-            {metadataError && <p role="alert" className="mt-2 text-center text-[10px] text-destructive">应用信息读取失败：{metadataError}</p>}
-            <div className="mt-4 flex justify-center gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={!metadata?.updaterConfigured} className="h-7 rounded-sm text-[10px]">检查更新</Button>
-              <Button type="button" variant="outline" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void copyDiagnostics()}><Copy size={12} />复制脱敏诊断信息</Button>
-            </div>
-            <p className="mt-3 text-center text-[9px] text-muted-foreground">{brand.fullName} · {brand.protocols}</p>
+          </nav>
+          <main className="compact-scrollbar min-w-0 flex-1 overflow-y-auto px-5 py-4" aria-label={section === "about" ? "关于 TermVista" : `${currentLabel}设置`}>
+            {settingsError && <div role="alert" className="mb-3 rounded-sm border border-destructive/40 bg-destructive/5 px-3 py-2 text-[10px] text-destructive">保存失败，界面保留原值：{settingsError}</div>}
+            {settingsBody}
           </main>
-        </>}
+        </div>
+        <footer className={`flex h-12 shrink-0 items-center border-t border-border bg-panel-header/50 px-4 ${resetAvailable ? "justify-between" : "justify-end"}`}>
+          {resetAvailable && <Button type="button" variant="ghost" size="sm" disabled={savingSection !== null} className="h-7 rounded-sm text-[10px]" onClick={() => void resetCurrentSection()}>恢复默认（{currentLabel}）</Button>}
+          <Button type="button" variant="outline" size="sm" className="h-7 rounded-sm text-[10px]" onClick={closeDialog}>关闭</Button>
+        </footer>
       </DialogContent>
     </Dialog>
   );

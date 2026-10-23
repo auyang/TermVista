@@ -1,7 +1,7 @@
 [package]
 name = "ai-ssh-studio"
-version = "0.0.2"
-description = "跨平台 AI SSH/SFTP 智能远程工作台"
+version = "0.1.0"
+description = "TermVista（端境）：跨平台 SSH/SFTP 智能远程工作台"
 authors = ["you"]
 edition = "2024"
 
@@ -41,6 +41,10 @@ uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
 russh-sftp = "3.0.1"
 rusqlite = { version = "0.31.0", features = ["bundled"] }
+base64 = "0.22"
+minisign-verify = "0.3"
+tauri-plugin-updater = "2.14.0"
+tauri-plugin-process = "^2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"

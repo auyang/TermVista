@@ -1,5 +1,6 @@
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { runWithUpdateMaintenanceTask } from "@/features/updater/maintenanceTasks";
 import type { ForwardRule, ForwardRuntime } from "./tunnelTypes";
 
 export async function listForwardRules(profileId?: string | null) {
@@ -7,19 +8,19 @@ export async function listForwardRules(profileId?: string | null) {
 }
 
 export async function saveForwardRule(rule: ForwardRule) {
-  return invoke<ForwardRule>("tunnel_rule_save", { rule });
+  return runWithUpdateMaintenanceTask("保存端口转发配置", () => invoke<ForwardRule>("tunnel_rule_save", { rule }));
 }
 
 export async function deleteForwardRule(ruleId: string) {
-  return invoke<boolean>("tunnel_rule_delete", { ruleId });
+  return runWithUpdateMaintenanceTask("删除端口转发配置", () => invoke<boolean>("tunnel_rule_delete", { ruleId }));
 }
 
 export async function startForward(ruleId: string, sessionId: string) {
-  return invoke<ForwardRuntime>("tunnel_start", { ruleId, sessionId });
+  return runWithUpdateMaintenanceTask("启动端口转发", () => invoke<ForwardRuntime>("tunnel_start", { ruleId, sessionId }));
 }
 
 export async function stopForward(ruleId: string) {
-  return invoke<ForwardRuntime>("tunnel_stop", { ruleId });
+  return runWithUpdateMaintenanceTask("停止端口转发", () => invoke<ForwardRuntime>("tunnel_stop", { ruleId }));
 }
 
 export async function listForwardRuntimes() {

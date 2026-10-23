@@ -7,6 +7,7 @@ import type {
   AiProviderView,
   AiStreamEvent,
 } from "@/features/ai/aiTypes";
+import { runWithUpdateMaintenanceTask } from "@/features/updater/maintenanceTasks";
 
 export function listAiProviders() {
   return invoke<AiProviderView[]>("ai_provider_list");
@@ -17,7 +18,7 @@ export function saveAiProvider(input: AiProviderInput) {
 }
 
 export function testAiProvider(providerId: string) {
-  return invoke<AiConnectionTestResult>("ai_provider_test", { providerId });
+  return runWithUpdateMaintenanceTask("测试 AI 服务连接", () => invoke<AiConnectionTestResult>("ai_provider_test", { providerId }));
 }
 
 export function previewAiContext(request: AiPreviewRequest) {

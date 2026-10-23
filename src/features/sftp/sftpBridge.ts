@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { runWithUpdateMaintenanceTask } from "@/features/updater/maintenanceTasks";
 
 export type RemoteEntryKind = "file" | "directory" | "symlink" | "other";
 export type LocalEntry = {
@@ -92,11 +93,11 @@ export function readSftpClipboardFiles() {
 }
 
 export function createSftpDirectory(sessionId: string, parent: string, name: string) {
-  return invoke<void>("sftp_mkdir", { sessionId, parent, name });
+  return runWithUpdateMaintenanceTask("SFTP 新建目录", () => invoke<void>("sftp_mkdir", { sessionId, parent, name }));
 }
 
 export function renameSftpPath(sessionId: string, path: string, newName: string) {
-  return invoke<string>("sftp_rename", { sessionId, path, newName });
+  return runWithUpdateMaintenanceTask("SFTP 重命名", () => invoke<string>("sftp_rename", { sessionId, path, newName }));
 }
 
 export function prepareSftpDelete(sessionId: string, path: string) {
@@ -104,7 +105,7 @@ export function prepareSftpDelete(sessionId: string, path: string) {
 }
 
 export function deleteSftpPath(sessionId: string, operationId: string) {
-  return invoke<void>("sftp_delete", { sessionId, operationId });
+  return runWithUpdateMaintenanceTask("SFTP 删除", () => invoke<void>("sftp_delete", { sessionId, operationId }));
 }
 
 export function startSftpTransfers(
@@ -115,7 +116,7 @@ export function startSftpTransfers(
   destinationDirectory: string,
   onProgress: Channel<TransferProgress>,
 ) {
-  return invoke<string[]>("sftp_transfer_start", { sessionId, direction, localGrantId, sourcePaths, destinationDirectory, onProgress });
+  return runWithUpdateMaintenanceTask("SFTP 传输启动", () => invoke<string[]>("sftp_transfer_start", { sessionId, direction, localGrantId, sourcePaths, destinationDirectory, onProgress }));
 }
 
 export function resolveSftpTransferConflict(transferId: string, policy: ConflictPolicy, applyToQueue = false) {

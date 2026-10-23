@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SshKeyManager } from "@/features/settings/SshKeyManager";
+import { runWithUpdateMaintenanceTask } from "@/features/updater/maintenanceTasks";
 
 type VaultStatus = {
   state: "uninitialized" | "locked" | "unlocked";
@@ -38,7 +39,7 @@ export function CredentialVaultSettings() {
     setBusy(true);
     setError(null);
     try {
-      setStatus(await operation());
+      setStatus(await runWithUpdateMaintenanceTask("更新凭据保险库", operation));
       setPassword("");
       setConfirmation("");
       setShowMasterSetup(false);

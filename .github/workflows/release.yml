@@ -10,9 +10,11 @@ permissions:
 
 jobs:
   verify-version:
-    name: 校验发布版本
+    name: 校验版本与更新安全配置
     runs-on: ubuntu-22.04
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - name: 检出源码
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -27,38 +29,181 @@ jobs:
       - name: 校验标签与三个工程版本一致
         run: node scripts/ci/verify-release.mjs "$GITHUB_REF_NAME"
 
-  build:
-    name: 构建跨平台安装包
+      - name: 阻止覆盖已发布 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if state="$(gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null)"; then
+            if [[ "$state" != "true" ]]; then
+              echo "标签 $tag 已对应正式 Release；禁止覆盖已发布版本及其资产。" >&2
+              exit 1
+            fi
+          fi
+
+      - name: 检查在线更新公钥与 fail-closed 策略
+        run: node scripts/ci/verify-updater-config.mjs
+
+  build-installers:
+    name: 构建普通安装包
     needs: verify-version
-    permissions:
-      contents: read
     uses: ./.github/workflows/desktop-build.yml
     with:
       artifact_retention_days: 2
 
+  build-signed-updater:
+    name: 构建并验证 ${{ matrix.platform }} 更新包
+    needs: verify-version
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: darwin-aarch64
+            platform: macOS Apple Silicon
+            os: macos-15
+            target: aarch64-apple-darwin
+            bundle: app
+            updater_extension: .app.tar.gz
+          - id: darwin-x86_64
+            platform: macOS Intel
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            bundle: app
+            updater_extension: .app.tar.gz
+          - id: windows-x86_64
+            platform: Windows x64
+            os: windows-2025
+            target: x86_64-pc-windows-msvc
+            bundle: nsis
+            updater_extension: .nsis.zip
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 检查签名密钥已由仓库所有者配置
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+            echo "缺少 Actions Secret TAURI_SIGNING_PRIVATE_KEY；拒绝生成未签名 Release。" >&2
+            exit 1
+          fi
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: 设置 pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.32.1
+          cache: true
+
+      - name: 安装前端依赖
+        shell: bash
+        run: |
+          test "$(pnpm --version)" = "10.32.1"
+          pnpm install --frozen-lockfile
+
+      - name: 安装 Rust stable 与目标平台
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy --component rustfmt
+          rustup default stable
+          rustup target add "${{ matrix.target }}"
+
+      - name: 构建签名更新包
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: '-'
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          artifact="release-updater/TermVista_${version}_${{ matrix.target }}${{ matrix.updater_extension }}"
+          pnpm tauri build --bundles "${{ matrix.bundle }}" --target "${{ matrix.target }}" --config src-tauri/tauri.updater.release.conf.json
+          node scripts/ci/stage-updater-artifacts.mjs "${{ matrix.target }}" "$version" "release-updater"
+          cargo run --locked --manifest-path src-tauri/Cargo.toml --example verify_updater_signature -- src-tauri/tauri.conf.json \
+            "$artifact" "$artifact.sig" "$version"
+
+      - name: 上传已验证的更新包与签名
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: TermVista-Updater-${{ matrix.id }}
+          path: release-updater/*
+          if-no-files-found: error
+          retention-days: 2
+
   draft-release:
-    name: 创建或更新 Draft Release
-    needs: build
+    name: 汇总签名产物并创建 Draft Release
+    needs: [verify-version, build-installers, build-signed-updater]
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:
-      - name: 下载 Windows 与 macOS 安装包
+      - name: 检出发布说明模板
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 下载 macOS 与 Windows 普通安装包
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: TermVista-macOS-*
-          path: release-assets
+          path: release-assets/installers
           merge-multiple: true
 
-      - name: 下载 Windows 安装包
+      - name: 下载 Windows 普通安装包
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: TermVista-Windows-*
-          path: release-assets
+          path: release-assets/installers
           merge-multiple: true
 
-      - name: 创建或更新草稿版本
+      - name: 下载三个平台的签名更新包
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: TermVista-Updater-darwin-aarch64
+          path: release-assets/updater
+
+      - name: 下载 macOS Intel 签名更新包
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: TermVista-Updater-darwin-x86_64
+          path: release-assets/updater
+
+      - name: 下载 Windows x64 签名更新包
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: TermVista-Updater-windows-x86_64
+          path: release-assets/updater
+
+      - name: 生成发布说明、更新清单与校验和
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$tag" --jq '.body' > "$RUNNER_TEMP/release-notes.md"
+          printf '\n\n' >> "$RUNNER_TEMP/release-notes.md"
+          cat scripts/ci/updater-release-disclaimer.md >> "$RUNNER_TEMP/release-notes.md"
+          node scripts/ci/generate-latest-json.mjs "$tag" release-assets \
+            "$RUNNER_TEMP/release-notes.md" release-assets/latest.json
+
+      - name: 创建或更新草稿版本（不覆盖已发布版本）
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -68,7 +213,7 @@ jobs:
           tag="$GITHUB_REF_NAME"
           mapfile -d '' assets < <(find release-assets -type f -print0 | sort -z)
           if (( ${#assets[@]} == 0 )); then
-            echo "没有找到可上传的安装包文件。" >&2
+            echo "没有找到可上传的安装包或更新清单。" >&2
             exit 1
           fi
 
@@ -77,11 +222,12 @@ jobs:
               echo "标签 $tag 已对应正式 Release；为保护已发布资产，停止覆盖。" >&2
               exit 1
             fi
+            gh release edit "$tag" --title "TermVista $tag" --notes-file "$RUNNER_TEMP/release-notes.md"
             gh release upload "$tag" "${assets[@]}" --clobber
           else
             gh release create "$tag" "${assets[@]}" \
               --draft \
               --verify-tag \
-              --generate-notes \
-              --title "TermVista $tag"
+              --title "TermVista $tag" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
           fi

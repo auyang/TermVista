@@ -10,6 +10,7 @@ pub struct GeneralSettings {
     pub restore_last_tabs: bool,
     pub auto_connect_saved_hosts: bool,
     pub remember_recent_connections: bool,
+    pub auto_check_updates: bool,
 }
 
 impl Default for GeneralSettings {
@@ -18,6 +19,7 @@ impl Default for GeneralSettings {
             restore_last_tabs: true,
             auto_connect_saved_hosts: false,
             remember_recent_connections: true,
+            auto_check_updates: true,
         }
     }
 }
@@ -164,6 +166,7 @@ pub struct AppMetadata {
     pub channel: Option<String>,
     pub build_hash: Option<String>,
     pub updater_configured: bool,
+    pub updater_config_reason: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -228,6 +231,8 @@ pub fn should_remember_recent_connection(
 #[tauri::command]
 pub fn app_metadata_get(app: tauri::AppHandle) -> AppMetadata {
     let package = app.package_info();
+    let (updater_configured, updater_config_reason) =
+        updater_config_status(app.config().plugins.0.get("updater"));
     AppMetadata {
         name: "TermVista".to_owned(),
         name_zh: "端境".to_owned(),
@@ -236,8 +241,71 @@ pub fn app_metadata_get(app: tauri::AppHandle) -> AppMetadata {
         arch: std::env::consts::ARCH.to_owned(),
         channel: non_empty_option(env!("CARGO_PKG_VERSION_PRE")),
         build_hash: option_env!("TERM_VISTA_BUILD_HASH").and_then(non_empty_option),
-        updater_configured: false,
+        updater_configured,
+        updater_config_reason,
     }
+}
+
+fn updater_config_status(config: Option<&Value>) -> (bool, String) {
+    const ENDPOINT: &str =
+        "https://github.com/auyang/TermVista/releases/latest/download/latest.json";
+    let Some(config) = config.and_then(Value::as_object) else {
+        return (false, "尚未配置在线更新服务。".to_owned());
+    };
+    let has_official_endpoint = config
+        .get("endpoints")
+        .and_then(Value::as_array)
+        .is_some_and(|items| items.len() == 1 && items[0].as_str() == Some(ENDPOINT));
+    if !has_official_endpoint {
+        return (
+            false,
+            "更新地址未配置为 TermVista 官方 HTTPS 发布源。".to_owned(),
+        );
+    }
+    if config
+        .get("dangerousInsecureTransportProtocol")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || config
+            .get("dangerousAcceptInvalidCerts")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        || config
+            .get("dangerousAcceptInvalidHostnames")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    {
+        return (
+            false,
+            "更新传输安全配置不符合要求，在线更新已禁用。".to_owned(),
+        );
+    }
+    if config
+        .get("allowDowngrades")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || !config
+            .get("requireSignedVersion")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    {
+        return (false, "更新版本安全校验未启用，在线更新已禁用。".to_owned());
+    }
+    let pubkey = config
+        .get("pubkey")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    use base64::Engine;
+    let valid_pubkey = base64::engine::general_purpose::STANDARD
+        .decode(pubkey)
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .is_some_and(|key_text| minisign_verify::PublicKey::decode(&key_text).is_ok());
+    if !valid_pubkey {
+        return (false, "尚未配置有效的 Tauri 更新签名公钥。".to_owned());
+    }
+    (true, "在线更新服务已配置。".to_owned())
 }
 
 #[tauri::command]
@@ -292,7 +360,7 @@ fn platform_name(os: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{PublicSettings, merge_object, platform_name};
+    use super::{PublicSettings, merge_object, platform_name, updater_config_status};
     use serde_json::{Value, json};
 
     #[test]
@@ -324,6 +392,7 @@ mod tests {
         assert!(!settings.general.restore_last_tabs);
         assert_eq!(settings.terminal, super::TerminalSettings::default());
         assert!(settings.monitoring.enabled);
+        assert!(settings.general.auto_check_updates);
     }
 
     #[test]
@@ -347,5 +416,52 @@ mod tests {
     fn platform_names_are_display_friendly() {
         assert_eq!(platform_name("macos"), "macOS");
         assert_eq!(platform_name("linux"), "Linux");
+    }
+
+    #[test]
+    fn updater_stays_disabled_without_a_real_signing_public_key() {
+        let config = json!({
+            "pubkey": "",
+            "endpoints": ["https://github.com/auyang/TermVista/releases/latest/download/latest.json"],
+            "requireSignedVersion": true,
+            "allowDowngrades": false
+        });
+        let (configured, reason) = updater_config_status(Some(&config));
+        assert!(!configured);
+        assert!(reason.contains("公钥"));
+    }
+
+    #[test]
+    fn configured_updater_public_key_is_a_valid_minisign_key() {
+        let app_config: Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let (configured, reason) = updater_config_status(app_config.pointer("/plugins/updater"));
+        assert!(configured, "{reason}");
+    }
+
+    #[test]
+    fn updater_rejects_non_official_endpoints_and_insecure_version_policy() {
+        let config = json!({
+            "pubkey": "",
+            "endpoints": ["http://updates.example.test/latest.json"],
+            "requireSignedVersion": true,
+            "allowDowngrades": false
+        });
+        assert!(!updater_config_status(Some(&config)).0);
+
+        let config = json!({
+            "pubkey": "",
+            "endpoints": ["https://github.com/auyang/TermVista/releases/latest/download/latest.json", null],
+            "requireSignedVersion": true,
+            "allowDowngrades": false
+        });
+        assert!(!updater_config_status(Some(&config)).0);
+
+        let config = json!({
+            "pubkey": "",
+            "endpoints": ["https://github.com/auyang/TermVista/releases/latest/download/latest.json"],
+            "requireSignedVersion": false,
+            "allowDowngrades": true
+        });
+        assert!(!updater_config_status(Some(&config)).0);
     }
 }

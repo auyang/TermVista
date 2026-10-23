@@ -61,6 +61,11 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+fn application_exit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SshConnectResult {
@@ -1815,6 +1820,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let known_hosts_path = app.path().app_data_dir()?.join("known_hosts.json");
             let connection_profiles_path = app.path().app_data_dir()?.join("connections.sqlite3");
@@ -1892,6 +1899,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            application_exit,
             connection_profiles_bootstrap,
             connection_profiles_list,
             connection_profile_save,

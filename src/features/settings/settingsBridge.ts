@@ -10,6 +10,7 @@ export type PublicSettings = {
     restoreLastTabs: boolean;
     autoConnectSavedHosts: boolean;
     rememberRecentConnections: boolean;
+    autoCheckUpdates: boolean;
   };
   terminal: {
     fontFamily: string;
@@ -43,6 +44,7 @@ export type AppMetadata = {
   channel: string | null;
   buildHash: string | null;
   updaterConfigured: boolean;
+  updaterConfigReason: string;
 };
 
 export type SanitizedDiagnosticInfo = {
@@ -60,6 +62,7 @@ export const defaultSettings: PublicSettings = {
     restoreLastTabs: true,
     autoConnectSavedHosts: false,
     rememberRecentConnections: true,
+    autoCheckUpdates: true,
   },
   terminal: {
     fontFamily: "Menlo, Monaco, 'SFMono-Regular', monospace",

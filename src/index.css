@@ -1,0 +1,302 @@
+@import "tailwindcss";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: dark;
+  --app-bg: #0f172a;
+  --panel-bg: #172338;
+  --panel-header: #1d2b41;
+  --terminal-bg: #0f172a;
+  --terminal-demo-fg: #9dc0ff;
+  --terminal-demo-border: rgba(117, 167, 255, 0.6);
+  --terminal-prompt-fg: #44d69a;
+  --terminal-cursor-bg: #37d69a;
+  --terminal-fg: #e7edf4;
+  --terminal-muted-fg: #9eafc2;
+  --terminal-icon-fg: #c8d5e3;
+  --terminal-toolbar-bg: #1b2d42;
+  --terminal-toolbar-top-bg: rgba(16, 32, 51, 0.7);
+  --terminal-border: #26364a;
+  --terminal-input-bg: rgba(255, 255, 255, 0.035);
+  --terminal-button-bg: #f7f9fc;
+  --terminal-button-fg: #273449;
+  --terminal-control-border: rgba(255, 255, 255, 0.15);
+  --terminal-hover-bg: rgba(255, 255, 255, 0.1);
+  --app-border: #29384a;
+  --app-fg: #dce5ee;
+  --muted-fg: #9aaebe;
+  --accent: #3b82f6;
+  --danger: #c66565;
+  --success: #6caf87;
+  --warning: #d2a453;
+  --monitor-send: #ef8c6c;
+  --monitor-receive: #68c98d;
+  --monitor-latency: #6fa1ff;
+  --resource-green: #7fc86e;
+  --resource-orange: #f2a05b;
+  --resource-gray: #aab4c1;
+  --terminal-action: #38d56f;
+  --radius: 4px;
+  --compact-control: 28px;
+  --ui-font-size: 12px;
+  --terminal-font-size: 14px;
+  --background: var(--app-bg);
+  --foreground: var(--app-fg);
+  --border: var(--app-border);
+  --input: var(--app-border);
+  --ring: var(--accent);
+  --primary: var(--accent);
+  --primary-foreground: #f5f9fc;
+  --secondary: var(--panel-header);
+  --secondary-foreground: var(--app-fg);
+  --muted: #35414c;
+  --muted-foreground: var(--muted-fg);
+  --accent-foreground: var(--app-fg);
+  --destructive: var(--danger);
+  --card: var(--panel-bg);
+  --card-foreground: var(--app-fg);
+  --popover: var(--panel-header);
+  --popover-foreground: var(--app-fg);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-panel: var(--panel-bg);
+  --color-panel-header: var(--panel-header);
+  --color-terminal: var(--terminal-bg);
+  --color-terminal-fg: var(--terminal-fg);
+  --color-terminal-muted: var(--terminal-muted-fg);
+  --color-terminal-icon: var(--terminal-icon-fg);
+  --color-terminal-toolbar: var(--terminal-toolbar-bg);
+  --color-terminal-toolbar-top: var(--terminal-toolbar-top-bg);
+  --color-terminal-border: var(--terminal-border);
+  --color-terminal-input: var(--terminal-input-bg);
+  --color-terminal-button: var(--terminal-button-bg);
+  --color-terminal-button-fg: var(--terminal-button-fg);
+  --color-terminal-control-border: var(--terminal-control-border);
+  --color-terminal-hover: var(--terminal-hover-bg);
+  --color-app-fg: var(--app-fg);
+  --color-muted-fg: var(--muted-fg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-terminal-action: var(--terminal-action);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --font-sans: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--app-border);
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--app-bg);
+    color: var(--app-fg);
+    font-family: var(--font-sans);
+    font-size: var(--ui-font-size);
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+
+  button {
+    user-select: none;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  [role="button"]:focus-visible,
+  [role="separator"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+}
+
+.resize-handle {
+  position: relative;
+  z-index: 4;
+  flex: none;
+  background: var(--app-border);
+  transition: background-color 100ms ease;
+}
+
+.resize-handle[aria-orientation="vertical"] {
+  width: 1px;
+  cursor: col-resize;
+}
+
+.resize-handle[aria-orientation="horizontal"] {
+  width: 100%;
+  height: 1px;
+  cursor: row-resize;
+}
+
+.resize-handle[aria-orientation="vertical"]::after,
+.resize-handle[aria-orientation="horizontal"]::after {
+  position: absolute;
+  content: "";
+  background: transparent;
+}
+
+.resize-handle[aria-orientation="vertical"]::after {
+  inset: 0 -3px;
+}
+
+.resize-handle[aria-orientation="horizontal"]::after {
+  inset: -3px 0;
+}
+
+.resize-handle:hover,
+.resize-handle[data-separator="active"] {
+  background: var(--accent);
+}
+
+.compact-scrollbar {
+  scrollbar-color: #536371 transparent;
+  scrollbar-width: thin;
+}
+
+.compact-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.compact-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: #536371;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+.app-shell {
+  background: var(--app-bg);
+  color: var(--app-fg);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --app-bg: #e2e8f0;
+  --panel-bg: #ffffff;
+  --panel-header: #f4f7fb;
+  --terminal-bg: #ffffff;
+  --terminal-fg: #263449;
+  --terminal-muted-fg: #66758a;
+  --terminal-icon-fg: #526278;
+  --terminal-toolbar-bg: #edf2f7;
+  --terminal-toolbar-top-bg: rgba(244, 247, 251, 0.92);
+  --terminal-border: #dbe3ec;
+  --terminal-input-bg: #f8fafc;
+  --terminal-button-bg: #ffffff;
+  --terminal-button-fg: #263449;
+  --terminal-control-border: #cbd5e1;
+  --terminal-hover-bg: rgba(38, 52, 73, 0.08);
+  --app-border: #dbe3ec;
+  --app-fg: #263449;
+  --muted-fg: #66758a;
+  --accent: #3b82f6;
+  --danger: #c34b3d;
+  --success: #35a75b;
+  --warning: #945b00;
+  --monitor-send: #b42318;
+  --monitor-receive: #18743a;
+  --monitor-latency: #1d4ed8;
+  --resource-green: #55a630;
+  --resource-orange: #c26814;
+  --resource-gray: #64748b;
+  --terminal-action: #15803d;
+  --background: var(--app-bg);
+  --foreground: var(--app-fg);
+  --border: var(--app-border);
+  --input: var(--app-border);
+  --ring: var(--accent);
+  --primary: var(--accent);
+  --primary-foreground: #ffffff;
+  --secondary: #eaf0f6;
+  --secondary-foreground: var(--app-fg);
+  --muted: #edf1f6;
+  --muted-foreground: var(--muted-fg);
+  --accent-foreground: var(--app-fg);
+  --destructive: var(--danger);
+  --card: var(--panel-bg);
+  --card-foreground: var(--app-fg);
+  --popover: #f8fafb;
+  --popover-foreground: var(--app-fg);
+}
+
+.terminal-workspace[data-terminal-theme="dark"] {
+  --terminal-bg: #0f172a;
+  --terminal-demo-fg: #9dc0ff;
+  --terminal-demo-border: rgba(117, 167, 255, 0.6);
+  --terminal-prompt-fg: #44d69a;
+  --terminal-cursor-bg: #37d69a;
+  --terminal-fg: #e7edf4;
+  --terminal-muted-fg: #9eafc2;
+  --terminal-icon-fg: #c8d5e3;
+  --terminal-toolbar-bg: #1b2d42;
+  --terminal-toolbar-top-bg: rgba(16, 32, 51, 0.7);
+  --terminal-border: #26364a;
+  --terminal-input-bg: rgba(255, 255, 255, 0.035);
+  --terminal-button-bg: #f7f9fc;
+  --terminal-button-fg: #273449;
+  --terminal-control-border: rgba(255, 255, 255, 0.15);
+  --terminal-hover-bg: rgba(255, 255, 255, 0.1);
+}
+
+.terminal-workspace[data-terminal-theme="light"] {
+  --terminal-bg: #ffffff;
+  --terminal-demo-fg: #1d4ed8;
+  --terminal-demo-border: #3b82f6;
+  --terminal-prompt-fg: #047857;
+  --terminal-cursor-bg: #059669;
+  --terminal-fg: #263449;
+  --terminal-muted-fg: #66758a;
+  --terminal-icon-fg: #526278;
+  --terminal-toolbar-bg: #edf2f7;
+  --terminal-toolbar-top-bg: rgba(244, 247, 251, 0.92);
+  --terminal-border: #dbe3ec;
+  --terminal-input-bg: #f8fafc;
+  --terminal-button-bg: #ffffff;
+  --terminal-button-fg: #263449;
+  --terminal-control-border: #cbd5e1;
+  --terminal-hover-bg: rgba(38, 52, 73, 0.08);
+}

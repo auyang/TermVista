@@ -44,6 +44,7 @@ struct TunnelInner {
 pub struct TunnelManager {
     inner: Arc<Mutex<TunnelInner>>,
     sink: Arc<RuntimeSink>,
+    operations: Mutex<()>,
 }
 
 impl Default for TunnelManager {
@@ -57,10 +58,32 @@ impl TunnelManager {
         Self {
             inner: Arc::new(Mutex::new(TunnelInner::default())),
             sink: Arc::new(sink),
+            operations: Mutex::new(()),
         }
     }
 
     pub async fn start(
+        &self,
+        rule: &ForwardRule,
+        session_id: &str,
+        sessions: Arc<SessionManager>,
+    ) -> Result<ForwardRuntime, TunnelError> {
+        let _operation = self.operations.lock().await;
+        self.start_locked(rule, session_id, sessions).await
+    }
+
+    pub async fn start_loaded(
+        &self,
+        load_rule: impl FnOnce() -> Result<ForwardRule, TunnelError>,
+        session_id: &str,
+        sessions: Arc<SessionManager>,
+    ) -> Result<ForwardRuntime, TunnelError> {
+        let _operation = self.operations.lock().await;
+        let rule = load_rule()?;
+        self.start_locked(&rule, session_id, sessions).await
+    }
+
+    async fn start_locked(
         &self,
         rule: &ForwardRule,
         session_id: &str,
@@ -219,6 +242,11 @@ impl TunnelManager {
     }
 
     pub async fn stop(&self, rule_id: &str) -> Result<ForwardRuntime, TunnelError> {
+        let _operation = self.operations.lock().await;
+        self.stop_locked(rule_id).await
+    }
+
+    async fn stop_locked(&self, rule_id: &str) -> Result<ForwardRuntime, TunnelError> {
         let (forward, stopping_runtime) = {
             let mut inner = self.inner.lock().await;
             let forward = inner.active.remove(rule_id);
@@ -262,6 +290,7 @@ impl TunnelManager {
     }
 
     pub async fn stop_session(&self, session_id: &str) {
+        let _operation = self.operations.lock().await;
         let ids: Vec<String> = {
             let inner = self.inner.lock().await;
             inner
@@ -272,11 +301,16 @@ impl TunnelManager {
                 .collect()
         };
         for rule_id in ids {
-            let _ = self.stop(&rule_id).await;
+            let _ = self.stop_locked(&rule_id).await;
         }
     }
 
     pub async fn stop_profile(&self, profile_id: &str) {
+        let _operation = self.operations.lock().await;
+        self.stop_profile_locked(profile_id).await;
+    }
+
+    async fn stop_profile_locked(&self, profile_id: &str) {
         let ids: Vec<String> = {
             let inner = self.inner.lock().await;
             inner
@@ -287,18 +321,24 @@ impl TunnelManager {
                 .collect()
         };
         for rule_id in ids {
-            let _ = self.stop(&rule_id).await;
+            let _ = self.stop_locked(&rule_id).await;
         }
     }
 
     pub async fn shutdown_all(&self) {
+        let _operation = self.operations.lock().await;
         let ids: Vec<String> = self.inner.lock().await.active.keys().cloned().collect();
         for rule_id in ids {
-            let _ = self.stop(&rule_id).await;
+            let _ = self.stop_locked(&rule_id).await;
         }
     }
 
     pub async fn ensure_stopped(&self, rule_id: &str) -> Result<(), TunnelError> {
+        let _operation = self.operations.lock().await;
+        self.ensure_stopped_locked(rule_id).await
+    }
+
+    async fn ensure_stopped_locked(&self, rule_id: &str) -> Result<(), TunnelError> {
         let inner = self.inner.lock().await;
         if inner
             .active
@@ -314,7 +354,8 @@ impl TunnelManager {
     }
 
     pub async fn forget_rule(&self, rule_id: &str) -> Result<(), TunnelError> {
-        self.ensure_stopped(rule_id).await?;
+        let _operation = self.operations.lock().await;
+        self.ensure_stopped_locked(rule_id).await?;
         let mut inner = self.inner.lock().await;
         inner.active.remove(rule_id);
         inner.runtimes.remove(rule_id);
@@ -322,6 +363,12 @@ impl TunnelManager {
     }
 
     pub async fn forget_profile(&self, profile_id: &str) {
+        let _operation = self.operations.lock().await;
+        self.stop_profile_locked(profile_id).await;
+        self.forget_profile_locked(profile_id).await;
+    }
+
+    async fn forget_profile_locked(&self, profile_id: &str) {
         let mut inner = self.inner.lock().await;
         inner
             .runtimes
@@ -329,6 +376,50 @@ impl TunnelManager {
         inner
             .active
             .retain(|_, forward| forward.profile_id != profile_id);
+    }
+
+    pub async fn with_rule_stopped<T>(
+        &self,
+        rule_id: &str,
+        action: impl FnOnce() -> Result<T, String>,
+    ) -> Result<T, String> {
+        let _operation = self.operations.lock().await;
+        self.ensure_stopped_locked(rule_id)
+            .await
+            .map_err(|error| error.message)?;
+        action()
+    }
+
+    pub async fn delete_rule_if_stopped(
+        &self,
+        rule_id: &str,
+        delete: impl FnOnce() -> Result<bool, String>,
+    ) -> Result<bool, String> {
+        let _operation = self.operations.lock().await;
+        self.ensure_stopped_locked(rule_id)
+            .await
+            .map_err(|error| error.message)?;
+        let deleted = delete()?;
+        if deleted {
+            let mut inner = self.inner.lock().await;
+            inner.active.remove(rule_id);
+            inner.runtimes.remove(rule_id);
+        }
+        Ok(deleted)
+    }
+
+    pub async fn delete_profile_and_stop_tunnels(
+        &self,
+        profile_id: &str,
+        delete: impl FnOnce() -> Result<bool, String>,
+    ) -> Result<bool, String> {
+        let _operation = self.operations.lock().await;
+        self.stop_profile_locked(profile_id).await;
+        let deleted = delete()?;
+        if deleted {
+            self.forget_profile_locked(profile_id).await;
+        }
+        Ok(deleted)
     }
 
     pub async fn runtime_list(&self) -> Vec<ForwardRuntime> {
@@ -347,6 +438,7 @@ impl TunnelManager {
             let runtime = inner.runtimes.entry(rule.id.clone()).or_insert_with(|| {
                 ForwardRuntime::stopped(rule.id.clone(), rule.profile_id.clone())
             });
+            runtime.profile_id = rule.profile_id.clone();
             change(runtime);
             runtime.updated_at = now_millis();
             runtime.clone()
@@ -593,7 +685,12 @@ async fn mutate_shared_runtime(
 #[cfg(test)]
 mod tests {
     use super::TunnelManager;
-    use crate::tunnels::models::{ForwardRule, TunnelErrorCode};
+    use crate::tunnels::models::{ForwardRule, TunnelError, TunnelErrorCode};
+    use std::{
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+    use tokio::{sync::oneshot, time::timeout};
 
     fn rule() -> ForwardRule {
         ForwardRule {
@@ -629,5 +726,69 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(error.code, TunnelErrorCode::SessionMissing);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn start_loaded_serializes_rule_read_with_deletion() {
+        let manager = Arc::new(TunnelManager::default());
+        let stored_rule = Arc::new(Mutex::new(Some(rule())));
+        let (loaded_tx, loaded_rx) = oneshot::channel();
+        let (continue_load_tx, continue_load_rx) = std::sync::mpsc::channel();
+        let continue_load_rx = Mutex::new(continue_load_rx);
+        let start_manager = Arc::clone(&manager);
+        let start_store = Arc::clone(&stored_rule);
+        let sessions = Arc::new(crate::ssh::SessionManager::new(
+            Arc::new(crate::ssh::RusshBackend),
+            Arc::new(
+                crate::ssh::HostKeyStore::load(std::env::temp_dir().join(format!(
+                    "termvista-no-session-hosts-{}.json",
+                    uuid::Uuid::new_v4()
+                )))
+                .unwrap(),
+            ),
+        ));
+
+        let start = tokio::spawn(async move {
+            start_manager
+                .start_loaded(
+                    || {
+                        let stored_rule = start_store.lock().unwrap().clone();
+                        let _ = loaded_tx.send(());
+                        continue_load_rx.lock().unwrap().recv().unwrap();
+                        stored_rule.ok_or_else(|| {
+                            TunnelError::new(TunnelErrorCode::InvalidRule, "规则已删除。")
+                        })
+                    },
+                    "missing-session",
+                    sessions,
+                )
+                .await
+        });
+        loaded_rx.await.unwrap();
+
+        let (delete_waiting_tx, delete_waiting_rx) = oneshot::channel();
+        let delete_manager = Arc::clone(&manager);
+        let delete_store = Arc::clone(&stored_rule);
+        let mut delete = tokio::spawn(async move {
+            let _ = delete_waiting_tx.send(());
+            delete_manager
+                .delete_rule_if_stopped("rule-1", || {
+                    delete_store.lock().unwrap().take();
+                    Ok(true)
+                })
+                .await
+        });
+        delete_waiting_rx.await.unwrap();
+        assert!(
+            timeout(Duration::from_millis(50), &mut delete)
+                .await
+                .is_err()
+        );
+
+        continue_load_tx.send(()).unwrap();
+        let start_error = start.await.unwrap().unwrap_err();
+        assert_eq!(start_error.code, TunnelErrorCode::SessionMissing);
+        assert!(delete.await.unwrap().unwrap());
+        assert!(stored_rule.lock().unwrap().is_none());
     }
 }

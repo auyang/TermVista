@@ -177,7 +177,7 @@ async fn local_forward_uses_verified_session_transfers_large_payloads_and_releas
     let session_id = connect(Arc::clone(&sessions), ssh_port).await;
     assert_eq!(server_metrics.auth_count.load(Ordering::Relaxed), 1);
 
-    let tunnel_manager = TunnelManager::default();
+    let tunnel_manager = Arc::new(TunnelManager::default());
     let local_port = unused_local_port().await;
     let rule = ForwardRule {
         id: "local-echo".to_owned(),
@@ -199,10 +199,31 @@ async fn local_forward_uses_verified_session_transfers_large_payloads_and_releas
         .unwrap_err();
     assert_eq!(mismatch.code, TunnelErrorCode::SessionProfileMismatch);
 
-    let started = tunnel_manager
-        .start(&rule, &session_id, Arc::clone(&sessions))
-        .await
-        .unwrap();
+    let first_manager = Arc::clone(&tunnel_manager);
+    let first_sessions = Arc::clone(&sessions);
+    let first_session_id = session_id.clone();
+    let first_rule = rule.clone();
+    let first_start = tokio::spawn(async move {
+        first_manager
+            .start(&first_rule, &first_session_id, first_sessions)
+            .await
+    });
+    let second_manager = Arc::clone(&tunnel_manager);
+    let second_sessions = Arc::clone(&sessions);
+    let second_session_id = session_id.clone();
+    let second_rule = rule.clone();
+    let second_start = tokio::spawn(async move {
+        second_manager
+            .start(&second_rule, &second_session_id, second_sessions)
+            .await
+    });
+    let first_result = first_start.await.unwrap();
+    let second_result = second_start.await.unwrap();
+    let (started, rejected) = match (first_result, second_result) {
+        (Ok(started), Err(rejected)) | (Err(rejected), Ok(started)) => (started, rejected),
+        (first, second) => panic!("并发启动同一规则只能有一个成功：{first:?} / {second:?}"),
+    };
+    assert_eq!(rejected.code, TunnelErrorCode::RuleRunning);
     assert_eq!(started.state, TunnelState::Running);
     assert_eq!(
         started.local_address.as_deref(),
@@ -315,15 +336,102 @@ async fn local_forward_uses_verified_session_transfers_large_payloads_and_releas
         .await
         .unwrap();
     assert_eq!(restart.state, TunnelState::Running);
-    tunnel_manager.stop_session(&session_id).await;
-    sessions.disconnect(&session_id).await.unwrap();
+    let shutdown_rule = ForwardRule {
+        id: "shutdown-rule".to_owned(),
+        local_port: u32::from(unused_local_port().await),
+        ..rule.clone()
+    };
+    tunnel_manager
+        .start(&shutdown_rule, &session_id, Arc::clone(&sessions))
+        .await
+        .unwrap();
+    tunnel_manager.shutdown_all().await;
     assert!(TcpStream::connect(("127.0.0.1", local_port)).await.is_err());
+    assert!(
+        TcpStream::connect(("127.0.0.1", shutdown_rule.local_port as u16))
+            .await
+            .is_err()
+    );
+
+    tunnel_manager
+        .start(&rule, &session_id, Arc::clone(&sessions))
+        .await
+        .unwrap();
+    server_handle.shutdown("Phase 4B-4 isolated SSH disconnect".to_owned());
+    timeout(Duration::from_secs(10), async {
+        loop {
+            let runtime = tunnel_manager
+                .runtime_list()
+                .await
+                .into_iter()
+                .find(|runtime| runtime.rule_id == rule.id)
+                .unwrap();
+            if runtime.state == TunnelState::Stopped
+                && runtime.last_error_code == Some(TunnelErrorCode::ConnectionLost)
+                && TcpStream::connect(("127.0.0.1", local_port)).await.is_err()
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("SSH 会话意外断开后，监听端口必须释放且状态恢复为已停止");
     assert_eq!(server_metrics.auth_count.load(Ordering::Relaxed), 1);
 
     echo_task.abort();
-    server_handle.shutdown("Phase 4B-4 loopback test finished".to_owned());
     server_task.await.unwrap().unwrap();
     std::fs::remove_dir_all(test_dir).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "仅用于手动原生 UI 联调；启动后按 Ctrl-C 停止"]
+async fn isolated_tunnel_ui_fixture_for_manual_tunnel_testing() {
+    let mut rng = russh::keys::ssh_key::rand_core::UnwrapErr(getrandom::SysRng);
+    let server_key =
+        russh::keys::PrivateKey::random(&mut rng, russh::keys::ssh_key::Algorithm::Ed25519)
+            .unwrap();
+    let host_identity = ai_ssh_studio_lib::ssh::HostKeyIdentity::from_openssh(
+        &server_key.public_key().to_openssh().unwrap(),
+    )
+    .unwrap();
+    let ssh_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let ssh_port = ssh_listener.local_addr().unwrap().port();
+    let server_config = Arc::new(server::Config {
+        auth_rejection_time: Duration::ZERO,
+        keys: vec![server_key],
+        methods: MethodSet::from(&[MethodKind::Password][..]),
+        ..server::Config::default()
+    });
+    let metrics = Arc::new(ServerMetrics::default());
+    let metrics_for_task = Arc::clone(&metrics);
+    let (handle_tx, handle_rx) = tokio::sync::oneshot::channel();
+    let _server_task = tokio::spawn(async move {
+        let mut server = LocalSshServer {
+            metrics: metrics_for_task,
+        };
+        let running = server.run_on_socket(server_config, &ssh_listener);
+        let _ = handle_tx.send(running.handle());
+        running.await
+    });
+    let _server_handle = handle_rx.await.unwrap();
+
+    let echo_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let echo_port = echo_listener.local_addr().unwrap().port();
+    let _echo_task = spawn_echo_server(echo_listener);
+
+    println!("ISOLATED_TUNNEL_UI host=127.0.0.1 ssh_port={ssh_port}");
+    println!("ISOLATED_TUNNEL_UI username={TEST_USERNAME} password={TEST_PASSWORD}");
+    println!(
+        "ISOLATED_TUNNEL_UI fingerprint={}",
+        host_identity.fingerprint_sha256
+    );
+    println!("ISOLATED_TUNNEL_UI tcp_echo_target=127.0.0.1:{echo_port}");
+    println!("ISOLATED_TUNNEL_UI only loopback; press Ctrl-C to stop");
+
+    loop {
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    }
 }
 
 #[cfg(unix)]

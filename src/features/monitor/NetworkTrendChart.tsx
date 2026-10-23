@@ -8,6 +8,41 @@ import { formatNetworkRate, toNetworkSeries } from "./networkChartModel";
 
 registerEChartsModules([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
+type NetworkTooltipItem = {
+  axisValue?: unknown;
+  axisValueLabel?: string;
+  seriesName?: string;
+  value?: unknown;
+};
+
+function escapeTooltipText(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+}
+
+function formatNetworkTooltip(params: unknown, interfaceName: string) {
+  const rows = (Array.isArray(params) ? params : [params])
+    .filter((item): item is NetworkTooltipItem => Boolean(item) && typeof item === "object");
+  const timeValue = rows.find((item) => item.axisValue !== undefined)?.axisValue;
+  const timestamp = typeof timeValue === "number" ? timeValue : Date.parse(String(timeValue ?? ""));
+  const time = Number.isFinite(timestamp)
+    ? new Date(timestamp).toLocaleString("zh-CN", { hour12: false })
+    : rows.find((item) => item.axisValueLabel)?.axisValueLabel ?? "时间不可用";
+  const series = rows.map((item) => {
+    const value = Array.isArray(item.value) ? item.value[1] : item.value;
+    const formatted = typeof value === "number" && Number.isFinite(value)
+      ? formatNetworkRate(value)
+      : "无采样值";
+    return `<div>${escapeTooltipText(item.seriesName ?? "网络速率")}：${escapeTooltipText(formatted)}</div>`;
+  }).join("");
+  return `<div>${escapeTooltipText(interfaceName)} · ${escapeTooltipText(time)}</div>${series}`;
+}
+
 type NetworkTrendChartProps = {
   history: NetworkPoint[];
   theme: "dark" | "light";
@@ -59,11 +94,11 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
       grid: { left: 38, right: 8, top: 8, bottom: 22 },
       tooltip: {
         trigger: "axis",
+        formatter: (params: unknown) => formatNetworkTooltip(params, interfaceName),
         axisPointer: { type: "line", lineStyle: { color: gridColor } },
         backgroundColor: theme === "dark" ? "#172232" : "#ffffff",
         borderColor: gridColor,
         textStyle: { color: textColor, fontSize: 10 },
-        valueFormatter: (value: unknown) => typeof value === "number" ? formatNetworkRate(value) : "无采样值",
       },
       xAxis: {
         type: "time",

@@ -1,13 +1,14 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { Activity, ChevronDown, ChevronUp, CircleGauge, Copy, Cpu, HardDrive, Network, RefreshCw, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useDiagnosticStore } from "@/features/diagnostics/diagnosticStore";
 import type { Monitored, ProcessMetric } from "@/features/monitor/monitorTypes";
 import { useMonitorStore } from "@/features/monitor/monitorStore";
-import { NetworkTrendChart } from "@/features/monitor/NetworkTrendChart";
 import { useSshSessionStore } from "@/stores/sshSessionStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+
+const NetworkTrendChart = lazy(() => import("@/features/monitor/NetworkTrendChart").then((module) => ({ default: module.NetworkTrendChart })));
 
 type MonitorSidebarProps = { collapsed: boolean; onToggle: () => void };
 type ProcessSort = "memory" | "cpu" | "command";
@@ -147,13 +148,16 @@ export function MonitorSidebar({ collapsed, onToggle }: MonitorSidebarProps) {
             </div>
             {selectedNetwork ? <>
               <div className="mb-1 flex items-center justify-between text-[10px]"><span style={{ color: "var(--monitor-send)" }}>↑ {formatRate(selectedNetwork.txBytesPerSec)}</span><span style={{ color: "var(--monitor-receive)" }}>↓ {formatRate(selectedNetwork.rxBytesPerSec)}</span><span className="text-muted-foreground">{selectedInterface}</span></div>
-              <NetworkTrendChart
-                history={networkHistory}
-                theme={theme}
-                metricState={snapshot?.network.state}
-                reason={snapshot?.network.reason}
-                interfaceName={selectedInterface ?? "服务器网卡"}
-              />
+              <Suspense fallback={<div className="flex h-[64px] items-center justify-center text-[9px] text-muted-foreground">正在加载网络趋势…</div>}>
+                <NetworkTrendChart
+                  key={`${sessionId ?? "no-session"}:${selectedInterface ?? "no-interface"}`}
+                  history={networkHistory}
+                  theme={theme}
+                  metricState={snapshot?.network.state}
+                  reason={snapshot?.network.reason}
+                  interfaceName={selectedInterface ?? "服务器网卡"}
+                />
+              </Suspense>
             </> : <MetricPlaceholder metric={snapshot?.network} fallback={connected ? "等待服务器网卡采样…" : "连接后显示网卡吞吐趋势。"} />}
           </section></ContextMenuTrigger>
           <ContextMenuContent><ContextMenuItem disabled={!connected} onSelect={() => diagnoseMetric("network")}><Activity size={12} />诊断当前网络指标</ContextMenuItem></ContextMenuContent>

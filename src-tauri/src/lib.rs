@@ -115,8 +115,9 @@ async fn connection_profile_delete(
     tunnels: State<'_, Arc<TunnelManager>>,
     profile_id: String,
 ) -> Result<bool, String> {
-    tunnels.stop_profile(&profile_id).await;
-    profiles.delete(&profile_id)
+    tunnels
+        .delete_profile_and_stop_tunnels(&profile_id, || profiles.delete(&profile_id))
+        .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -133,23 +134,24 @@ async fn tunnel_rule_save(
     tunnels: State<'_, Arc<TunnelManager>>,
     mut rule: ForwardRule,
 ) -> Result<ForwardRule, String> {
+    let rule_id = rule.id.clone();
     tunnels
-        .ensure_stopped(&rule.id)
+        .with_rule_stopped(&rule_id, || {
+            rule.validate_and_normalize()
+                .map_err(|error| error.message)?;
+            rule.updated_at = tunnels::models::now_millis();
+            profiles.forward_rule_save(&rule).map_err(|error| {
+                if error.contains("UNIQUE constraint failed") {
+                    "此服务器已经有规则使用了该本地端口。".to_owned()
+                } else if error.contains("FOREIGN KEY constraint failed") {
+                    "绑定的服务器配置已不存在，请重新选择服务器。".to_owned()
+                } else {
+                    error
+                }
+            })?;
+            Ok(rule)
+        })
         .await
-        .map_err(|error| error.message)?;
-    rule.validate_and_normalize()
-        .map_err(|error| error.message)?;
-    rule.updated_at = tunnels::models::now_millis();
-    profiles.forward_rule_save(&rule).map_err(|error| {
-        if error.contains("UNIQUE constraint failed") {
-            "此服务器已经有规则使用了该本地端口。".to_owned()
-        } else if error.contains("FOREIGN KEY constraint failed") {
-            "绑定的服务器配置已不存在，请重新选择服务器。".to_owned()
-        } else {
-            error
-        }
-    })?;
-    Ok(rule)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -159,17 +161,8 @@ async fn tunnel_rule_delete(
     rule_id: String,
 ) -> Result<bool, String> {
     tunnels
-        .ensure_stopped(&rule_id)
+        .delete_rule_if_stopped(&rule_id, || profiles.forward_rule_delete(&rule_id))
         .await
-        .map_err(|error| error.message)?;
-    let deleted = profiles.forward_rule_delete(&rule_id)?;
-    if deleted {
-        tunnels
-            .forget_rule(&rule_id)
-            .await
-            .map_err(|error| error.message)?;
-    }
-    Ok(deleted)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -180,24 +173,29 @@ async fn tunnel_start(
     rule_id: String,
     session_id: String,
 ) -> Result<ForwardRuntime, tunnels::models::TunnelError> {
-    let rule = profiles
-        .forward_rules_list(None)
-        .map_err(|_| {
-            tunnels::models::TunnelError::new(
-                tunnels::models::TunnelErrorCode::Internal,
-                "无法读取端口转发规则。",
-            )
-        })?
-        .into_iter()
-        .find(|rule| rule.id == rule_id)
-        .ok_or_else(|| {
-            tunnels::models::TunnelError::new(
-                tunnels::models::TunnelErrorCode::InvalidRule,
-                "找不到端口转发规则。",
-            )
-        })?;
     tunnels
-        .start(&rule, &session_id, sessions.inner().clone())
+        .start_loaded(
+            || {
+                profiles
+                    .forward_rules_list(None)
+                    .map_err(|_| {
+                        tunnels::models::TunnelError::new(
+                            tunnels::models::TunnelErrorCode::Internal,
+                            "无法读取端口转发规则。",
+                        )
+                    })?
+                    .into_iter()
+                    .find(|rule| rule.id == rule_id)
+                    .ok_or_else(|| {
+                        tunnels::models::TunnelError::new(
+                            tunnels::models::TunnelErrorCode::InvalidRule,
+                            "找不到端口转发规则。",
+                        )
+                    })
+            },
+            &session_id,
+            sessions.inner().clone(),
+        )
         .await
 }
 

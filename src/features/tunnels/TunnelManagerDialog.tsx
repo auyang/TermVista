@@ -27,7 +27,11 @@ function readableError(error: unknown) {
   if (typeof error === "string") {
     try { return (JSON.parse(error) as { message?: string }).message ?? error; } catch { return error; }
   }
-  return error instanceof Error ? error.message : "端口转发操作失败。";
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return error.message;
+  }
+  return "端口转发操作失败。";
 }
 
 function createRuleId() {
@@ -49,8 +53,10 @@ export function TunnelManagerDialog() {
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [draft, setDraft] = useState<RuleDraft | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ForwardRule | null>(null);
+  const [startTarget, setStartTarget] = useState<ForwardRule | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [busyRuleIds, setBusyRuleIds] = useState<Set<string>>(() => new Set());
 
   const sortedProfiles = useMemo(() => [...profiles].sort((a, b) =>
     a.group.localeCompare(b.group, "zh-CN") || (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, "zh-CN")), [profiles]);
@@ -137,6 +143,7 @@ export function TunnelManagerDialog() {
       toast.error("请先连接此服务器，再启动端口转发。");
       return;
     }
+    setBusyRuleIds((current) => new Set(current).add(rule.id));
     try {
       applyRuntime(await startForward(rule.id, activeSessionId));
       toast.success(`已监听 ${rule.localHost}:${rule.localPort}。`);
@@ -146,16 +153,35 @@ export function TunnelManagerDialog() {
         const current = await listForwardRuntimes();
         replaceRuntimes(current);
       } catch { /* 保留当前运行状态，错误已展示。 */ }
+    } finally {
+      setBusyRuleIds((current) => {
+        const next = new Set(current);
+        next.delete(rule.id);
+        return next;
+      });
     }
   };
 
   const stopRule = async (rule: ForwardRule) => {
+    setBusyRuleIds((current) => new Set(current).add(rule.id));
     try {
       applyRuntime(await stopForward(rule.id));
       toast.success("端口转发已停止，监听端口已释放。");
     } catch (error) {
       toast.error(`停止失败：${readableError(error)}`);
+    } finally {
+      setBusyRuleIds((current) => {
+        const next = new Set(current);
+        next.delete(rule.id);
+        return next;
+      });
     }
+  };
+
+  const confirmStart = () => {
+    const rule = startTarget;
+    setStartTarget(null);
+    if (rule) void startRule(rule);
   };
 
   const removeRule = async () => {
@@ -192,13 +218,13 @@ export function TunnelManagerDialog() {
 
   return <>
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
-      <DialogContent className="flex h-[min(680px,calc(100vh-48px))] max-w-[980px] flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[min(680px,calc(100vh-48px))] w-[min(980px,calc(100vw-32px))] max-w-[980px] flex-col gap-0 overflow-hidden p-0">
         <header className="flex h-10 shrink-0 items-center justify-between border-b border-border/60 bg-panel-header px-3">
           <div className="flex min-w-0 items-center gap-2"><GitFork size={14} className="text-accent" /><DialogTitle className="text-sm">端口转发</DialogTitle></div>
           <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-sm" aria-label="关闭端口转发" onClick={close}><X size={14} /></Button>
         </header>
         <DialogDescription className="border-b border-border/50 px-3 py-2 text-[10px] leading-4 text-muted-foreground">
-          仅监听本机 127.0.0.1；隧道使用对应 SSH 会话，不会在应用重启后自动恢复。请先建立并验证 SSH 连接，再手动启动。
+          仅监听本机 127.0.0.1；本机其他程序也能连接此地址。隧道使用对应 SSH 会话，不会在应用重启后自动恢复。请先建立并验证 SSH 连接，再手动启动。
         </DialogDescription>
         {!isTauri() && <div className="m-3 rounded-sm border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-800 dark:text-amber-200">端口转发需要在 TermVista 桌面应用中运行。</div>}
         <div className="flex min-h-0 flex-1">
@@ -249,8 +275,8 @@ export function TunnelManagerDialog() {
                 rule={rule}
                 runtime={runtimes[rule.id]}
                 canStart={Boolean(activeSessionId)}
-                disabled={!isTauri()}
-                onStart={() => void startRule(rule)}
+                disabled={!isTauri() || busyRuleIds.has(rule.id)}
+                onStart={() => setStartTarget(rule)}
                 onStop={() => void stopRule(rule)}
                 onCopy={() => void copyLocalAddress(runtimes[rule.id])}
                 onEdit={() => beginEdit(rule)}
@@ -266,6 +292,15 @@ export function TunnelManagerDialog() {
         </div>
       </DialogContent>
     </Dialog>
+    <AlertDialog open={Boolean(startTarget)} onOpenChange={(next) => { if (!next) setStartTarget(null); }}>
+      <AlertDialogContent>
+        <AlertDialogTitle>启动本地端口转发？</AlertDialogTitle>
+        <AlertDialogDescription>
+          本机其他程序可以连接 127.0.0.1:{startTarget?.localPort}，并通过此 SSH 会话访问 {startTarget?.targetHost}:{startTarget?.targetPort}。监听仅限本机，不会开放到局域网或公网；请只对可信服务启用。
+        </AlertDialogDescription>
+        <div className="flex justify-end gap-2"><AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">取消</Button></AlertDialogCancel><Button type="button" size="sm" className="h-7 rounded-sm px-2" onClick={confirmStart}>启动转发</Button></div>
+      </AlertDialogContent>
+    </AlertDialog>
     <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(next) => { if (!next) setDeleteTarget(null); }}>
       <AlertDialogContent>
         <AlertDialogTitle>删除端口转发规则？</AlertDialogTitle>

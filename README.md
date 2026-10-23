@@ -12,6 +12,16 @@
 | --- | --- |
 | ![TermVista 未连接首页（亮色）](docs/screenshots/home-light-1440x900.png) | ![TermVista 未连接首页（暗色）](docs/screenshots/home-dark-1440x900.png) |
 
+以下为已连接工作区及应用设置截图。
+
+| 已连接工作区（亮色） | 已连接工作区（暗色） |
+| --- | --- |
+| ![TermVista 已连接工作区（亮色）](docs/screenshots/1.png) | ![TermVista 已连接工作区（暗色）](docs/screenshots/2.png) |
+
+| 关于 TermVista | 应用设置 |
+| --- | --- |
+| ![关于 TermVista](docs/screenshots/3.png) | ![TermVista 应用设置](docs/screenshots/4.png) |
+
 ## 功能
 
 - **SSH 终端**：支持密码和 SSH 私钥认证、多标签会话、终端重连，以及与当前 PTY 共用的命令输入栏。

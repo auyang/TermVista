@@ -1,4 +1,5 @@
 export type AiProviderKind = "openAiCompatible" | "ollama";
+export type AiTaskMode = "ask" | "diagnose" | "plan";
 
 export type AiProviderView = {
   id: string;
@@ -8,7 +9,15 @@ export type AiProviderView = {
   model: string;
   timeoutSeconds: number;
   apiKeyConfigured: boolean;
+  apiKeyRequired: boolean;
   allowInsecureHttp: boolean;
+};
+
+export type AiProviderModelOption = {
+  id: string;
+  streaming?: boolean;
+  toolCalling?: boolean;
+  structuredOutput?: boolean;
 };
 
 export type AiProviderInput = {
@@ -25,14 +34,20 @@ export type AiProviderInput = {
 
 export type AiContextSource =
   | { kind: "terminalSelection"; text: string }
+  | { kind: "terminalRecentOutput"; text: string }
   | { kind: "monitorSnapshot" }
-  | { kind: "sftpSelectedText"; remotePath: string };
+  | { kind: "sftpSelectedText"; remotePath: string }
+  | { kind: "editorSelection"; documentId: string; revision: number; text: string }
+  | { kind: "editorBuffer"; documentId: string; revision: number; dirty: boolean; text: string }
+  | { kind: "diagnosticEvidenceRefs"; runId: string; evidenceIds: string[] };
 
 export type AiPreviewRequest = {
   sessionId: string;
   providerId: string;
   prompt: string;
   sources: AiContextSource[];
+  includeHistory: boolean;
+  mode: AiTaskMode;
 };
 
 export type AiContextSourcePreview = {
@@ -41,13 +56,21 @@ export type AiContextSourcePreview = {
   bytes: number;
   truncated: boolean;
   redacted: boolean;
+  editorDocumentId?: string;
+  editorRevision?: number;
+  editorDirty?: boolean;
 };
 
 export type AiContextPreview = {
   snapshotId: string;
   sessionId: string;
   hostLabel: string;
+  hostFingerprintSha256: string;
   providerDestination: string;
+  providerModel: string;
+  providerKind: AiProviderKind;
+  conversationHistoryIncluded: boolean;
+  taskMode: AiTaskMode;
   redactedPrompt: string;
   promptBytes: number;
   promptTruncated: boolean;
@@ -61,7 +84,7 @@ export type AiStreamEvent =
   | { type: "started"; requestId: string; sessionId: string }
   | { type: "delta"; requestId: string; sessionId: string; text: string }
   | { type: "usage"; requestId: string; sessionId: string; inputTokens?: number; outputTokens?: number }
-  | { type: "completed"; requestId: string; sessionId: string; finishReason?: string }
+  | { type: "completed"; requestId: string; sessionId: string; finishReason?: string; elapsedMs: number }
   | { type: "cancelled"; requestId: string; sessionId: string }
   | { type: "error"; requestId: string; sessionId: string; code: string; message: string };
 
@@ -71,11 +94,22 @@ export type AiMessage = {
   content: string;
   status: "complete" | "streaming" | "cancelled" | "error";
   errorMessage?: string;
+  usage?: { inputTokens?: number; outputTokens?: number };
+  elapsedMs?: number;
+  mode?: AiTaskMode;
+  editorBinding?: {
+    documentId: string;
+    revision: number;
+    originalText: string;
+    languageId: string;
+  };
 };
 
 export type AiConnectionTestResult = {
   success: boolean;
   message: string;
+  errorCode?: string;
   model?: string;
   elapsedMs?: number;
+  capabilities?: AiProviderModelOption;
 };

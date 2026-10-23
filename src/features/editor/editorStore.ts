@@ -6,6 +6,8 @@ export type EditorSaveState = "ready" | "saving" | "saved" | "conflict" | "offli
 export type RemoteEditorTab = Omit<RemoteDocument, "text"> & {
   text: string;
   languageId: string;
+  revision: number;
+  selectionText: string;
   savedText: string;
   dirty: boolean;
   saveState: EditorSaveState;
@@ -18,6 +20,7 @@ type EditorState = {
   open: (document: RemoteDocument, languageId: string) => { documentId: string; overLimit: boolean };
   activate: (connectionId: string, documentId: string) => void;
   updateText: (documentId: string, text: string) => void;
+  updateSelection: (documentId: string, text: string) => void;
   setLanguage: (documentId: string, languageId: string) => void;
   setSaveState: (documentId: string, saveState: EditorSaveState, error?: string | null) => void;
   markSaved: (documentId: string, result: { sha256: string; text: string; canonicalPath: string; displayName: string; sizeBytes: number }) => void;
@@ -35,6 +38,8 @@ function toEditorTab(document: RemoteDocument, languageId: string): RemoteEditor
     ...document,
     text,
     savedText: text,
+    revision: 0,
+    selectionText: "",
     languageId,
     dirty: false,
     saveState: document.sessionId ? "ready" : "offline",
@@ -51,7 +56,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       set((state) => ({
         activeByConnection: { ...state.activeByConnection, [document.connectionId]: document.documentId },
         documents: state.documents.map((item) => item.documentId === document.documentId && !item.dirty
-          ? { ...item, ...document, text: document.text ?? "", savedText: document.text ?? "", languageId }
+          ? { ...item, ...document, text: document.text ?? "", savedText: document.text ?? "", languageId, revision: item.revision + Number(item.text !== (document.text ?? "")) }
           : item),
       }));
       return { documentId: document.documentId, overLimit: false };
@@ -68,8 +73,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   })),
   updateText: (documentId, text) => set((state) => ({
     documents: state.documents.map((item) => item.documentId === documentId
-      ? { ...item, text, dirty: text !== item.savedText, saveState: text === item.savedText ? "ready" : "ready", error: null }
+      ? { ...item, text, revision: item.revision + Number(item.text !== text), dirty: text !== item.savedText, saveState: "ready", error: null }
       : item),
+  })),
+  updateSelection: (documentId, selectionText) => set((state) => ({
+    documents: state.documents.map((item) => item.documentId === documentId ? { ...item, selectionText } : item),
   })),
   setLanguage: (documentId, languageId) => set((state) => ({
     documents: state.documents.map((item) => item.documentId === documentId ? { ...item, languageId } : item),
@@ -88,6 +96,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         ...item,
         ...document,
         text: keepDirtyText ? item.text : document.text ?? "",
+        revision: item.revision + Number(!keepDirtyText && item.text !== (document.text ?? "")),
+        selectionText: keepDirtyText ? item.selectionText : "",
         savedText: keepDirtyText ? item.savedText : document.text ?? "",
         dirty: keepDirtyText ? item.dirty : false,
         languageId: item.languageId,

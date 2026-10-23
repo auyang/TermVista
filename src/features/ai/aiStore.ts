@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AiContextSource, AiMessage, AiProviderView } from "@/features/ai/aiTypes";
+import type { AiContextSource, AiMessage, AiProviderView, AiTaskMode } from "@/features/ai/aiTypes";
 
 export type AiIntent = {
   sessionId: string;
@@ -17,9 +17,10 @@ type AiState = {
   setProviders: (providers: AiProviderView[]) => void;
   setSelectedProviderId: (providerId: string) => void;
   setIntent: (intent: AiIntent | null) => void;
-  beginStream: (sessionId: string, requestId: string, userText: string) => void;
+  beginStream: (sessionId: string, requestId: string, userText: string, mode: AiTaskMode, editorBinding?: AiMessage["editorBinding"]) => void;
   applyDelta: (sessionId: string, requestId: string, text: string) => void;
-  finishStream: (sessionId: string, requestId: string, status: "complete" | "cancelled" | "error", errorMessage?: string) => void;
+  applyUsage: (sessionId: string, requestId: string, inputTokens?: number, outputTokens?: number) => void;
+  finishStream: (sessionId: string, requestId: string, status: "complete" | "cancelled" | "error", errorMessage?: string, elapsedMs?: number) => void;
   clearSession: (sessionId: string) => void;
 };
 
@@ -42,10 +43,10 @@ export const useAiStore = create<AiState>((set) => ({
   })),
   setSelectedProviderId: (selectedProviderId) => set({ selectedProviderId }),
   setIntent: (intent) => set({ intent }),
-  beginStream: (sessionId, requestId, userText) => set((state) => {
+  beginStream: (sessionId, requestId, userText, mode, editorBinding) => set((state) => {
     const assistantId = makeId();
-    const userMessage: AiMessage = { id: makeId(), role: "user", content: userText, status: "complete" };
-    const assistantMessage: AiMessage = { id: assistantId, role: "assistant", content: "", status: "streaming" };
+    const userMessage: AiMessage = { id: makeId(), role: "user", content: userText, status: "complete", mode };
+    const assistantMessage: AiMessage = { id: assistantId, role: "assistant", content: "", status: "streaming", mode, editorBinding };
     return {
       conversations: { ...state.conversations, [sessionId]: [...(state.conversations[sessionId] ?? []), userMessage, assistantMessage] },
       activeRequests: { ...state.activeRequests, [sessionId]: requestId },
@@ -64,7 +65,20 @@ export const useAiStore = create<AiState>((set) => ({
       },
     };
   }),
-  finishStream: (sessionId, requestId, status, errorMessage) => set((state) => {
+  applyUsage: (sessionId, requestId, inputTokens, outputTokens) => set((state) => {
+    if (state.activeRequests[sessionId] !== requestId) return state;
+    if (inputTokens === undefined && outputTokens === undefined) return state;
+    const messageId = state.streamingMessageIds[sessionId];
+    return {
+      conversations: {
+        ...state.conversations,
+        [sessionId]: (state.conversations[sessionId] ?? []).map((message) =>
+          message.id === messageId ? { ...message, usage: { inputTokens, outputTokens } } : message,
+        ),
+      },
+    };
+  }),
+  finishStream: (sessionId, requestId, status, errorMessage, elapsedMs) => set((state) => {
     if (state.activeRequests[sessionId] !== requestId) return state;
     const messageId = state.streamingMessageIds[sessionId];
     return {
@@ -73,7 +87,7 @@ export const useAiStore = create<AiState>((set) => ({
       conversations: {
         ...state.conversations,
         [sessionId]: (state.conversations[sessionId] ?? []).map((message) =>
-          message.id === messageId ? { ...message, status, errorMessage } : message,
+          message.id === messageId ? { ...message, status, errorMessage, elapsedMs } : message,
         ),
       },
     };

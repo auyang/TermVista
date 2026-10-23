@@ -7,6 +7,7 @@ import { createDiagnosticPlan, listDiagnosticTemplates, previewDiagnosticReport 
 import { approveAndStartDiagnostic, approveAndStartDiagnosticReport, cancelRunningDiagnostic } from "@/features/diagnostics/diagnosticController";
 import { useDiagnosticStore } from "@/features/diagnostics/diagnosticStore";
 import type { DiagnosticPlanPreview, DiagnosticReportPreview, DiagnosticSelectedContext, DiagnosticTemplateDescriptor, DiagnosticTemplateId } from "@/features/diagnostics/diagnosticTypes";
+import { matchDiagnosticIntent } from "@/features/diagnostics/diagnosticIntent";
 import { useAiStore } from "@/features/ai/aiStore";
 
 function errorMessage(error: unknown) {
@@ -28,7 +29,7 @@ const contextTemplate = (context: DiagnosticSelectedContext): DiagnosticTemplate
   return "currentHost";
 };
 
-export function DiagnosticPanel({ sessionId, connected }: { sessionId: string; connected: boolean }) {
+export function DiagnosticPanel({ sessionId, connected, onSelectAiEvidence }: { sessionId: string; connected: boolean; onSelectAiEvidence?: (runId: string, evidenceIds: string[]) => void }) {
   const plan = useDiagnosticStore((state) => sessionId ? state.plans[sessionId] : undefined);
   const run = useDiagnosticStore((state) => sessionId ? state.runs[sessionId] : undefined);
   const activeRunId = useDiagnosticStore((state) => sessionId ? state.activeRunIds[sessionId] : undefined);
@@ -38,10 +39,13 @@ export function DiagnosticPanel({ sessionId, connected }: { sessionId: string; c
   const providers = useAiStore((state) => state.providers);
   const selectedProviderId = useAiStore((state) => state.selectedProviderId);
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? null;
+  const providerNeedsKey = Boolean(selectedProvider?.apiKeyRequired && !selectedProvider.apiKeyConfigured);
   const [templates, setTemplates] = useState<DiagnosticTemplateDescriptor[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [serviceName, setServiceName] = useState("nginx.service");
   const [port, setPort] = useState("443");
+  const [intentPrompt, setIntentPrompt] = useState("");
+  const [matchedTemplateId, setMatchedTemplateId] = useState<DiagnosticTemplateId | null>(null);
   const [working, setWorking] = useState(false);
   const [reportWorking, setReportWorking] = useState(false);
   const [reportPreview, setReportPreview] = useState<DiagnosticReportPreview | null>(null);
@@ -91,6 +95,12 @@ export function DiagnosticPanel({ sessionId, connected }: { sessionId: string; c
     }
   }, [connected, port, serviceName, sessionId, setPlan]);
 
+  const recognizeIntent = () => {
+    const match = matchDiagnosticIntent(intentPrompt);
+    setMatchedTemplateId(match);
+    if (!match) toast.message("未能唯一匹配已有只读模板；请使用下面的模板按钮，或补充更具体的故障描述。");
+  };
+
   useEffect(() => {
     if (!pendingContext) return;
     if (!sessionId || pendingContext.sessionId !== sessionId) {
@@ -133,7 +143,7 @@ export function DiagnosticPanel({ sessionId, connected }: { sessionId: string; c
 
   const prepareReport = async () => {
     if (!run || !sessionId || run.status !== "completed" || !selectedProvider) return;
-    if (!selectedProvider.apiKeyConfigured) {
+    if (selectedProvider.apiKeyRequired && !selectedProvider.apiKeyConfigured) {
       toast.message("请先在 AI 设置中保存当前服务商的 API Key。");
       return;
     }
@@ -204,6 +214,17 @@ export function DiagnosticPanel({ sessionId, connected }: { sessionId: string; c
               <Sparkles size={10} className="shrink-0 text-accent" />{template.title}
             </Button>)}
           </div>
+          <div className="space-y-1 rounded-sm border border-border bg-panel-header/35 p-1.5">
+            <label className="grid gap-1 text-[9px] text-muted-foreground">用自然语言描述问题
+              <input className="h-6 rounded-sm border border-border bg-background px-1.5 text-[10px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring" value={intentPrompt} onChange={(event) => { setIntentPrompt(event.target.value); setMatchedTemplateId(null); }} maxLength={300} placeholder="例如：为什么 Nginx 返回 502？" aria-label="自然语言诊断问题" />
+            </label>
+            <div className="flex items-center gap-1.5">
+              <Button type="button" variant="outline" size="sm" className="h-6 rounded-sm px-1.5 text-[9px]" disabled={!intentPrompt.trim() || working} onClick={recognizeIntent}>匹配只读模板</Button>
+              {matchedTemplateId && <span className="min-w-0 flex-1 truncate text-[9px] text-muted-foreground">匹配：{templates.find((template) => template.id === matchedTemplateId)?.title ?? matchedTemplateId}</span>}
+              {matchedTemplateId && <Button type="button" size="sm" className="h-6 shrink-0 rounded-sm px-1.5 text-[9px]" disabled={working} onClick={() => void createPlan(matchedTemplateId)}>检查参数并生成计划</Button>}
+            </div>
+            <p className="text-[8px] leading-3 text-muted-foreground">本地匹配到已有模板后仍需检查目标服务/端口及读取范围；生成计划不会启动远端检查。</p>
+          </div>
         </>}
 
         {plan?.sessionId === sessionId && <PlanReview
@@ -231,11 +252,12 @@ export function DiagnosticPanel({ sessionId, connected }: { sessionId: string; c
           </details>)}
           {run.status === "completed" && run.evidence.length > 0 && <>
             <p className="text-[9px] text-muted-foreground">未发送给 AI。生成模型报告会再次展示脱敏内容和发送目标，需单独确认；拒绝后不会发起模型请求。</p>
+            {onSelectAiEvidence && <Button type="button" variant="outline" size="sm" className="h-6 rounded-sm px-1.5 text-[9px]" disabled={!selectedEvidenceIds.length} onClick={() => onSelectAiEvidence(run.runId, selectedEvidenceIds)}>把所选证据加入对话</Button>}
             <div className="flex items-center gap-1.5">
               <span className="min-w-0 flex-1 truncate text-[9px] text-muted-foreground">{selectedProvider?.name ?? "尚未配置模型"}</span>
-              <Button type="button" size="sm" className="h-6 rounded-sm px-1.5 text-[9px]" disabled={reportWorking || !selectedProvider?.apiKeyConfigured || selectedEvidenceIds.length === 0} onClick={() => void prepareReport()}><Sparkles size={10} />{reportWorking ? "准备中…" : "预览并生成报告"}</Button>
+              <Button type="button" size="sm" className="h-6 rounded-sm px-1.5 text-[9px]" disabled={reportWorking || !selectedProvider || providerNeedsKey || selectedEvidenceIds.length === 0} onClick={() => void prepareReport()}><Sparkles size={10} />{reportWorking ? "准备中…" : "预览并生成报告"}</Button>
             </div>
-          {!selectedProvider?.apiKeyConfigured && <p className="text-[9px] text-amber-700 dark:text-amber-300">请先配置并选择一个已保存 API Key 的模型服务商。</p>}
+          {providerNeedsKey && <p className="text-[9px] text-amber-700 dark:text-amber-300">请先配置并选择一个已保存 API Key 的模型服务商。</p>}
           </>}
         </div>}
         {working && <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground"><LoaderCircle size={11} className="animate-spin" />正在处理…</div>}

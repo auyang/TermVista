@@ -1,21 +1,29 @@
-import { Children, isValidElement, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useRef, type ReactNode } from "react";
+import * as monaco from "monaco-editor";
 import ReactMarkdown, { type Components } from "react-markdown";
 import { Check, Copy, TerminalSquare } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { insertAiCommand } from "@/features/terminal/commandBarRegistry";
+import { parseAiPlanResult } from "@/features/ai/planResult";
 import type { AiMessage } from "@/features/ai/aiTypes";
+import { useEditorStore } from "@/features/editor/editorStore";
+import "@/features/editor/monacoWorkers";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 export function AiMessageView({ message, attemptId, canInsert }: { message: AiMessage; attemptId?: string; canInsert: boolean }) {
   return (
     <article className={`rounded-sm border px-2.5 py-2 ${message.role === "user" ? "ml-5 border-accent/25 bg-accent/5" : "mr-2 border-border bg-panel-header/60"}`}>
       <header className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>{message.role === "user" ? "你" : "AI 助手 · 生成内容需自行审阅"}</span>
+        <span>{message.role === "user" ? "你" : message.mode === "plan" ? "AI 计划 · 仅供审阅" : "AI 助手 · 生成内容需自行审阅"}</span>
         {message.status === "streaming" && <span className="inline-flex items-center gap-1"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />生成中</span>}
         {message.status === "cancelled" && <span>已停止</span>}
+        {message.role === "assistant" && (message.elapsedMs !== undefined || message.usage) && <span className="text-muted-foreground">{message.elapsedMs !== undefined ? `${(message.elapsedMs / 1000).toFixed(1)} 秒` : ""}{message.usage && ` · 输入 ${message.usage.inputTokens ?? "—"} / 输出 ${message.usage.outputTokens ?? "—"} tokens`}</span>}
       </header>
-      {message.role === "assistant" ? (
+      {message.role === "assistant" && message.mode === "plan" && message.status === "complete" ? (
+        <PlanOutput message={message} attemptId={attemptId} canInsert={canInsert} />
+      ) : message.role === "assistant" ? (
         <div className="min-w-0 break-words text-[11px] leading-[1.65] text-foreground">
           <ReactMarkdown components={markdownComponents(attemptId, canInsert)}>{message.content || (message.status === "streaming" ? "…" : "")}</ReactMarkdown>
         </div>
@@ -23,6 +31,87 @@ export function AiMessageView({ message, attemptId, canInsert }: { message: AiMe
       {message.errorMessage && <p className="mt-1 text-[10px] text-destructive">{message.errorMessage}</p>}
     </article>
   );
+}
+
+function PlanOutput({ message, attemptId, canInsert }: { message: AiMessage; attemptId?: string; canInsert: boolean }) {
+  const plan = parseAiPlanResult(message.content);
+  if (!plan) {
+    return <div className="space-y-1.5 text-[10px]">
+      <p className="rounded-sm border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-amber-800 dark:text-amber-200">模型输出不符合可验证的计划格式，未提供应用操作。</p>
+      <div className="whitespace-pre-wrap break-words font-mono text-[10px]">{message.content}</div>
+    </div>;
+  }
+  if (plan.kind === "question") return <div className="rounded-sm border border-border bg-background px-2 py-1.5 text-[11px]">{plan.summary}</div>;
+  if (plan.kind === "command") return <div className="space-y-1.5"><p className="text-[10px] leading-4">{plan.summary}</p><CodeBlock attemptId={attemptId} canInsert={canInsert}><code className="language-shell">{plan.command}</code></CodeBlock><p className="text-[9px] text-muted-foreground">插入只会填入终端命令栏；命令尚未发送，需由你审阅并手动执行。</p></div>;
+  return <CodeEditOutput message={message} summary={plan.summary} replacement={plan.replacement} />;
+}
+
+function CodeEditOutput({ message, summary, replacement }: { message: AiMessage; summary: string; replacement: string }) {
+  const theme = useWorkspaceStore((state) => state.theme);
+  const binding = message.editorBinding;
+  const current = useEditorStore((state) => binding ? state.documents.find((document) => document.documentId === binding.documentId) : undefined);
+  const canApply = Boolean(binding && current && current.revision === binding.revision);
+  const apply = () => {
+    if (!binding) return;
+    const document = useEditorStore.getState().documents.find((item) => item.documentId === binding.documentId);
+    if (!document || document.revision !== binding.revision) {
+      toast.error("编辑器内容在生成建议后已改变。请重新选择缓冲并生成差异建议。");
+      return;
+    }
+    useEditorStore.getState().updateText(binding.documentId, replacement);
+    toast.success("建议已应用到本地 Monaco 缓冲。远程文件尚未保存。");
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(replacement);
+      toast.success("建议文本已复制。");
+    } catch {
+      toast.error("无法访问剪贴板。");
+    }
+  };
+
+  return <section className="space-y-1.5">
+    <p className="text-[10px] leading-4">{summary}</p>
+    {binding ? <MonacoDiff original={binding.originalText} modified={replacement} language={binding.languageId} theme={theme} /> : <p className="rounded-sm border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[10px] text-amber-800 dark:text-amber-200">本次没有授权 Monaco 全文上下文，不能将代码建议应用到编辑器。</p>}
+    <div className="flex items-center justify-between gap-2 text-[9px]">
+      <span className="text-muted-foreground">仅作用于本地缓冲；远程文件不会自动保存。</span>
+      <span className="flex shrink-0 gap-1">
+        <Button type="button" variant="outline" size="sm" className="h-6 rounded-sm px-1.5 text-[9px]" onClick={() => void copy()}>复制建议</Button>
+        <Button type="button" size="sm" className="h-6 rounded-sm px-1.5 text-[9px]" disabled={!canApply} onClick={apply}>应用到本地缓冲</Button>
+      </span>
+    </div>
+  </section>;
+}
+
+function MonacoDiff({ original, modified, language, theme }: { original: string; modified: string; language: string; theme: "light" | "dark" }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = containerRef.current;
+    if (!host) return;
+    const editor = monaco.editor.createDiffEditor(host, {
+      automaticLayout: true,
+      readOnly: true,
+      originalEditable: false,
+      renderSideBySide: false,
+      minimap: { enabled: false },
+      folding: true,
+      lineNumbers: "on",
+      scrollBeyondLastLine: false,
+      fontSize: 10,
+      wordWrap: "on",
+      renderOverviewRuler: false,
+    });
+    monaco.editor.setTheme(theme === "dark" ? "vs-dark" : "vs");
+    const originalModel = monaco.editor.createModel(original, language);
+    const modifiedModel = monaco.editor.createModel(modified, language);
+    editor.setModel({ original: originalModel, modified: modifiedModel });
+    return () => {
+      editor.dispose();
+      originalModel.dispose();
+      modifiedModel.dispose();
+    };
+  }, [language, modified, original, theme]);
+  return <div ref={containerRef} className="h-64 w-full overflow-hidden rounded-sm border border-border" aria-label="Monaco 代码差异" />;
 }
 
 function markdownComponents(attemptId: string | undefined, canInsert: boolean): Components {

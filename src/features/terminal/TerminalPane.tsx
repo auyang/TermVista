@@ -20,6 +20,7 @@ import { useSftpSessionStore } from "@/stores/sftpSessionStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useSettingsStore } from "@/features/settings/settingsStore";
 import { canReconnectFromTerminalEnter } from "@/features/ssh/reconnectPolicy";
+import { getUiFontScale } from "@/lib/uiFontScale";
 
 const darkTerminalTheme = {
   background: "#0d1b2a",
@@ -101,7 +102,7 @@ function SshTerminalView({ attemptId, active }: { attemptId: string; active: boo
       convertEol: false,
       scrollback: currentSettings.scrollback,
       fontFamily: currentSettings.fontFamily,
-      fontSize: currentSettings.fontSize,
+      fontSize: currentSettings.fontSize * getUiFontScale(),
       lineHeight: currentSettings.lineHeight,
       theme: resolvedTerminalTheme(currentSettings.colorScheme, useWorkspaceStore.getState().theme),
       linkHandler: {
@@ -233,11 +234,12 @@ function SshTerminalView({ attemptId, active }: { attemptId: string; active: boo
   useEffect(() => {
     const terminal = terminalRef.current;
     if (!terminal) return;
+    const fontSize = terminalSettings.fontSize * getUiFontScale();
     const layoutChanged = terminal.options.fontFamily !== terminalSettings.fontFamily
-      || terminal.options.fontSize !== terminalSettings.fontSize
+      || terminal.options.fontSize !== fontSize
       || terminal.options.lineHeight !== terminalSettings.lineHeight;
     terminal.options.fontFamily = terminalSettings.fontFamily;
-    terminal.options.fontSize = terminalSettings.fontSize;
+    terminal.options.fontSize = fontSize;
     terminal.options.lineHeight = terminalSettings.lineHeight;
     terminal.options.cursorStyle = terminalSettings.cursorStyle;
     terminal.options.cursorBlink = terminalSettings.cursorBlink;

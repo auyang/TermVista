@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { Activity, ChevronDown, ChevronUp, CircleGauge, Copy, Cpu, HardDrive, Network, RefreshCw, Server } from "lucide-react";
+import { Activity, ChevronDown, ChevronUp, Copy, Cpu, HardDrive, Network, RefreshCw, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { useDiagnosticStore } from "@/features/diagnostics/diagnosticStore";
@@ -33,7 +33,6 @@ export function MonitorSidebar({ collapsed, onToggle }: MonitorSidebarProps) {
   const selectedInterface = monitor?.selectedInterface ?? network?.selectedInterface ?? network?.interfaces[0]?.name;
   const selectedNetwork = network?.interfaces.find((item) => item.name === selectedInterface);
   const networkHistory = selectedInterface ? monitor?.networkHistory[selectedInterface] ?? [] : [];
-  const latencyHistory = monitor?.latencyHistory ?? [];
   const sortedProcesses = useMemo(() => {
     const items = [...(snapshot?.processes.value ?? [])];
     if (processSort === "cpu") return items.sort((a, b) => b.cpuPercent - a.cpuPercent);
@@ -163,14 +162,6 @@ export function MonitorSidebar({ collapsed, onToggle }: MonitorSidebarProps) {
           <ContextMenuContent><ContextMenuItem disabled={!connected} onSelect={() => diagnoseMetric("network")}><Activity size={12} />诊断当前网络指标</ContextMenuItem></ContextMenuContent>
           </ContextMenu>
 
-          <section className="border-b border-border px-3 py-2" aria-label="SSH 请求往返">
-            <div className="mb-1 flex items-center justify-between"><SectionHeading icon={<CircleGauge size={12} />} title="延迟监测" /><span className="text-[9px] text-muted-foreground">SSH RTT</span></div>
-            {snapshot?.latency.value ? <>
-              <div className="mb-1 flex items-center justify-between text-[10px]"><span className="text-muted-foreground">SSH 请求往返</span><span className={`font-mono ${snapshot.latency.state === "stale" ? "text-muted-foreground" : "text-accent"}`}>{snapshot.latency.value.sshRoundTripMs.toFixed(1)} ms{snapshot.latency.state === "stale" ? " · 过期" : ""}</span></div>
-              <Sparkline values={latencyHistory} ariaLabel="SSH exec 请求往返时间趋势" height={40} color="var(--monitor-latency)" />
-            </> : <MetricPlaceholder metric={snapshot?.latency} fallback={connected ? "等待 SSH 请求往返采样…" : "连接后显示 SSH exec 往返时间。"} />}
-          </section>
-
           <ContextMenu>
           <ContextMenuTrigger asChild><section className="px-3 py-2" aria-label="磁盘列表">
             <div className="mb-1 flex items-center justify-between"><SectionHeading icon={<HardDrive size={12} />} title="磁盘" />{snapshot?.disks.state === "stale" && <MetricStateLabel />}</div>
@@ -223,27 +214,6 @@ function MetricButton({ active, onClick, children }: { active: boolean; onClick:
 
 function MetricStateLabel() {
   return <span className="text-[9px] text-muted-foreground">过期</span>;
-}
-
-function Sparkline({ values, secondary, ariaLabel, height = 64, color = "var(--monitor-send)" }: { values: number[]; secondary?: number[]; ariaLabel: string; height?: number; color?: string }) {
-  const path = useMemo(() => chartPath(values, height), [values, height]);
-  const secondPath = useMemo(() => secondary ? chartPath(secondary, height) : "", [secondary, height]);
-  if (values.length < 2) return <div className="h-2" aria-label={ariaLabel} />;
-  return <svg className="h-full max-h-16 w-full" style={{ height }} viewBox={`0 0 280 ${height}`} preserveAspectRatio="none" aria-label={ariaLabel} role="img">
-    <path d={`M0 ${height - 1}H280M0 ${height / 2}H280`} fill="none" stroke="var(--app-border)" strokeDasharray="2 3" strokeWidth=".7" />
-    <path d={path} fill="none" stroke={color} strokeWidth="1.5" />
-    {secondPath && <path d={secondPath} fill="none" stroke="var(--monitor-receive)" strokeWidth="1.5" />}
-  </svg>;
-}
-
-function chartPath(values: number[], height: number) {
-  if (values.length < 2) return "";
-  const ceiling = Math.max(...values, 1);
-  return values.map((value, index) => {
-    const x = index * 280 / (values.length - 1);
-    const y = height - 2 - Math.min(ceiling, Math.max(0, value)) / ceiling * (height - 4);
-    return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
-  }).join(" ");
 }
 
 function metricText<T>(metric?: Monitored<T>) {

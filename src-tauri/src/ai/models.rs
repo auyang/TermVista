@@ -7,6 +7,15 @@ pub enum AiProviderKind {
     Ollama,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AiTaskMode {
+    #[default]
+    Ask,
+    Diagnose,
+    Plan,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderConfig {
@@ -45,7 +54,17 @@ pub struct ProviderView {
     pub model: String,
     pub timeout_seconds: u64,
     pub api_key_configured: bool,
+    pub api_key_required: bool,
     pub allow_insecure_http: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderModelOption {
+    pub id: String,
+    pub streaming: Option<bool>,
+    pub tool_calling: Option<bool>,
+    pub structured_output: Option<bool>,
 }
 
 impl ProviderConfig {
@@ -58,6 +77,7 @@ impl ProviderConfig {
             model: self.model.clone(),
             timeout_seconds: self.timeout_seconds,
             api_key_configured,
+            api_key_required: self.kind == AiProviderKind::OpenAiCompatible,
             allow_insecure_http: self.allow_insecure_http,
         }
     }
@@ -70,9 +90,31 @@ impl ProviderConfig {
     rename_all_fields = "camelCase"
 )]
 pub enum ContextSourceRequest {
-    TerminalSelection { text: String },
+    TerminalSelection {
+        text: String,
+    },
+    TerminalRecentOutput {
+        text: String,
+    },
     MonitorSnapshot,
-    SftpSelectedText { remote_path: String },
+    SftpSelectedText {
+        remote_path: String,
+    },
+    EditorSelection {
+        document_id: String,
+        revision: u64,
+        text: String,
+    },
+    EditorBuffer {
+        document_id: String,
+        revision: u64,
+        dirty: bool,
+        text: String,
+    },
+    DiagnosticEvidenceRefs {
+        run_id: String,
+        evidence_ids: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -82,6 +124,10 @@ pub struct ContextPreviewRequest {
     pub provider_id: String,
     pub prompt: String,
     pub sources: Vec<ContextSourceRequest>,
+    #[serde(default)]
+    pub include_history: bool,
+    #[serde(default)]
+    pub mode: AiTaskMode,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -92,6 +138,9 @@ pub struct ContextSourcePreview {
     pub bytes: usize,
     pub truncated: bool,
     pub redacted: bool,
+    pub editor_document_id: Option<String>,
+    pub editor_revision: Option<u64>,
+    pub editor_dirty: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -100,7 +149,12 @@ pub struct ContextPreview {
     pub snapshot_id: String,
     pub session_id: String,
     pub host_label: String,
+    pub host_fingerprint_sha256: String,
     pub provider_destination: String,
+    pub provider_model: String,
+    pub provider_kind: AiProviderKind,
+    pub conversation_history_included: bool,
+    pub task_mode: AiTaskMode,
     pub redacted_prompt: String,
     pub prompt_bytes: usize,
     pub prompt_truncated: bool,
@@ -136,6 +190,7 @@ pub enum AiStreamEvent {
         request_id: String,
         session_id: String,
         finish_reason: Option<String>,
+        elapsed_ms: u64,
     },
     Cancelled {
         request_id: String,
@@ -160,8 +215,10 @@ pub struct ChatAccepted {
 pub struct ConnectionTestResult {
     pub success: bool,
     pub message: String,
+    pub error_code: Option<String>,
     pub model: Option<String>,
     pub elapsed_ms: Option<u128>,
+    pub capabilities: Option<ProviderModelOption>,
 }
 
 #[derive(Clone, Debug, Serialize)]

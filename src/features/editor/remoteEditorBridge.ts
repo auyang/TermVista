@@ -114,3 +114,19 @@ export function rebindRemoteDocument(documentId: string, newSessionId: string) {
 export function closeRemoteDocument(documentId: string) {
   return invoke<void>("editor_close", { documentId });
 }
+
+export function registerAiEditorRevision(
+  documentId: string,
+  sessionId: string,
+  revision: number,
+  dirty: boolean,
+  currentText: string,
+) {
+  return invoke<void>("editor_ai_buffer_revision_register", {
+    documentId,
+    sessionId,
+    revision,
+    dirty,
+    currentText,
+  });
+}

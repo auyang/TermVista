@@ -442,6 +442,12 @@ impl SftpManager {
             }
             let session = self.get_session(session_id).await?;
             let path = resolve_remote_path(&session, path).await?;
+            if is_sensitive_ai_path(&path) {
+                return Err(SftpError::new(
+                    SftpErrorCode::PermissionDenied,
+                    "出于安全考虑，AI 不读取 SSH 凭据、私钥、环境密钥或系统敏感目录。",
+                ));
+            }
             let metadata = session.symlink_metadata(path.clone()).await?;
             if metadata.file_type() != FileType::File {
                 return Err(SftpError::new(
@@ -2096,6 +2102,29 @@ fn io_error(message: String) -> SftpError {
     SftpError::new(SftpErrorCode::Other, format!("文件流传输失败：{message}"))
 }
 
+fn is_sensitive_ai_path(path: &str) -> bool {
+    let normalized = path.to_ascii_lowercase();
+    let segments = normalized
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>();
+    let file_name = segments.last().copied().unwrap_or_default();
+    normalized == "/etc"
+        || normalized.starts_with("/etc/")
+        || segments
+            .iter()
+            .any(|segment| matches!(*segment, ".ssh" | ".gnupg" | ".aws" | ".azure" | ".kube"))
+        || file_name == ".env"
+        || file_name.starts_with(".env.")
+        || file_name.starts_with("id_rsa")
+        || file_name.starts_with("id_ed25519")
+        || [
+            ".pem", ".key", ".p12", ".pfx", ".p7b", ".p7c", ".crt", ".cer",
+        ]
+        .iter()
+        .any(|suffix| file_name.ends_with(suffix))
+}
+
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, path::PathBuf};
@@ -2104,7 +2133,7 @@ mod tests {
 
     use super::{
         LocalRootGrant, RemoteEntryKind, copy_name, decode_ai_text, find_local_grant,
-        remote_basename, remote_join, remote_parent, resolve_local_directory,
+        is_sensitive_ai_path, remote_basename, remote_join, remote_parent, resolve_local_directory,
         safe_download_basename, validate_local_relative_path, validate_name, validate_remote_path,
     };
 
@@ -2120,6 +2149,20 @@ mod tests {
             Some("my file.txt")
         );
         assert_eq!(remote_join("/", "tmp"), "/tmp");
+    }
+
+    #[test]
+    fn ai_source_blocks_credentials_and_private_key_paths() {
+        for path in [
+            "/home/user/.ssh/config",
+            "/home/user/.env.local",
+            "/opt/app/id_ed25519_work",
+            "/etc/app/config.yaml",
+            "/srv/app/tls/server.pem",
+        ] {
+            assert!(is_sensitive_ai_path(path), "{path} must be blocked");
+        }
+        assert!(!is_sensitive_ai_path("/srv/app/config.yaml"));
     }
 
     #[test]

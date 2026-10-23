@@ -76,7 +76,6 @@ export function ConnectionManagerDialog() {
   const removeProfile = useWorkspaceStore((state) => state.removeProfile);
   const toggleFavorite = useWorkspaceStore((state) => state.toggleFavorite);
   const clearManagerEditRequest = useWorkspaceStore((state) => state.clearManagerProfileEditRequest);
-  const addDemoTab = useWorkspaceStore((state) => state.addDemoTab);
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -504,7 +503,10 @@ export function ConnectionManagerDialog() {
         </header>
 
         {view === "connections" ? <>
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+          {formOpen ? <div className="flex h-9 items-center gap-2 border-b border-border bg-panel-header/35 px-4">
+            <Server size={13} className="text-accent" />
+            <span className="text-xs font-semibold">{editingId ? "编辑服务器配置" : "新增服务器配置"}</span>
+          </div> : <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <div className="relative min-w-0 flex-1">
               <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input className="h-7 rounded-sm pl-7 text-xs" placeholder="搜索名称、主机、用户、端口或环境" value={search} onChange={(event) => setSearch(event.target.value)} />
@@ -512,10 +514,9 @@ export function ConnectionManagerDialog() {
             <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 rounded-sm px-2 text-xs" onClick={() => void createGroup(null)}><FolderPlus size={13} />新建分组</Button>
             <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 rounded-sm px-2 text-xs" disabled={sshConfigBusy} onClick={() => void chooseSshConfig()}><FolderOpen size={13} />导入 Config</Button>
             <Button type="button" size="sm" className="h-7 shrink-0 rounded-sm px-2 text-xs" onClick={showNewForm}><Plus size={13} />新增配置</Button>
-          </div>
-          <div className="compact-scrollbar max-h-[min(500px,58vh)] min-h-36 overflow-y-auto px-3 py-2">
-            {formOpen && <ProfileForm draft={draft} setDraft={setDraft} groups={groups} editing={Boolean(editingId)} onSubmit={submitProfile} onCancel={() => { setFormOpen(false); setEditingId(null); setDraft(emptyDraft()); }} />}
-            {filtered.length === 0 && groups.length === 0 ? (
+          </div>}
+          <div className={`compact-scrollbar overflow-y-auto ${formOpen ? "max-h-[calc(100vh-112px)] min-h-0 px-4 py-4" : "max-h-[min(500px,58vh)] min-h-36 px-3 py-2"}`}>
+            {formOpen ? <ProfileForm draft={draft} setDraft={setDraft} groups={groups} editing={Boolean(editingId)} onSubmit={submitProfile} onCancel={() => { setFormOpen(false); setEditingId(null); setDraft(emptyDraft()); }} /> : filtered.length === 0 && groups.length === 0 ? (
               <div className="flex min-h-32 flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
                 <Server size={18} strokeWidth={1.5} />
                 <span>{search ? "没有匹配的服务器" : "暂无已保存配置"}</span>
@@ -533,10 +534,6 @@ export function ConnectionManagerDialog() {
               onMoveGroup={(groupId, parentId) => void moveGroupInto(groupId, parentId)}
             />}
           </div>
-          <footer className="flex min-h-8 items-center justify-between border-t border-border bg-panel-header px-3 text-[10px] text-muted-foreground">
-            <span>双击或 Enter 连接 · 已保存凭据由本机加密保险库保护</span>
-            {import.meta.env.DEV && <Button type="button" variant="ghost" size="sm" className="h-6 rounded-sm px-2 text-[10px]" onClick={() => { addDemoTab(); setOpen(false); }}>打开布局演示</Button>}
-          </footer>
         </> : <>
           <div className="compact-scrollbar max-h-[min(500px,58vh)] min-h-36 overflow-y-auto px-3 py-2">
             <p className="mb-2 text-[10px] leading-4 text-muted-foreground">永久信任仅在服务器公钥与记录完全一致时自动通过。撤销记录后，下次连接会重新显示指纹确认。</p>
@@ -561,20 +558,32 @@ export function ConnectionManagerDialog() {
       </DialogContent>
 
       <Dialog open={Boolean(groupDialog)} onOpenChange={(next) => { if (!next && !groupDialogBusy) setGroupDialog(null); }}>
-        <DialogContent className="max-w-sm">
-          {groupDialog && <form className="space-y-3" onSubmit={(event) => void submitGroupDialog(event)}>
-            <div>
-              <DialogTitle>{groupDialog.kind === "create" ? groupDialog.parentId ? "新建子分组" : "新建分组" : "修改分组名称"}</DialogTitle>
-              <DialogDescription className="mt-1">分组只用于整理本机保存的连接配置。</DialogDescription>
+        <DialogContent className="w-[min(420px,calc(100vw-40px))] max-w-none gap-0 overflow-hidden p-0">
+          {groupDialog && <form onSubmit={(event) => void submitGroupDialog(event)}>
+            <header className="flex items-start gap-3 border-b border-border bg-panel-header/45 px-5 py-4">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-accent/15 bg-accent/8 text-accent">
+                {groupDialog.kind === "create" ? <FolderPlus size={16} /> : <Pencil size={15} />}
+              </span>
+              <div className="min-w-0 pt-0.5">
+                <DialogTitle className="text-sm">{groupDialog.kind === "create" ? groupDialog.parentId ? "新建子分组" : "新建分组" : "修改分组名称"}</DialogTitle>
+                <DialogDescription className="mt-1 text-[11px] leading-4">
+                  {groupDialog.kind === "rename"
+                    ? "修改名称不会影响分组中的服务器配置。"
+                    : groupDialog.parentId
+                      ? `将在「${groups.find((group) => group.id === groupDialog.parentId)?.name ?? "上级分组"}」下创建。`
+                      : "按环境或用途整理本机保存的服务器连接。"}
+                </DialogDescription>
+              </div>
+            </header>
+            <div className="space-y-2 px-5 py-5">
+              <label htmlFor="connection-group-name" className="block text-xs font-medium">分组名称</label>
+              <Input id="connection-group-name" autoFocus maxLength={80} placeholder="例如：生产环境" className="h-9 rounded-sm text-xs" value={groupDialog.name} onChange={(event) => setGroupDialog((current) => current ? { ...current, name: event.target.value } : current)} />
+              <p className="text-[10px] leading-4 text-muted-foreground">名称仅用于连接管理器中的本机整理。</p>
             </div>
-            <div className="space-y-1.5">
-              <label htmlFor="connection-group-name" className="text-xs font-medium">分组名称</label>
-              <Input id="connection-group-name" autoFocus maxLength={80} value={groupDialog.name} onChange={(event) => setGroupDialog((current) => current ? { ...current, name: event.target.value } : current)} />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2" disabled={groupDialogBusy} onClick={() => setGroupDialog(null)}>取消</Button>
-              <Button type="submit" size="sm" className="h-7 rounded-sm px-2" disabled={!groupDialog.name.trim() || groupDialogBusy}>{groupDialogBusy ? "正在保存…" : groupDialog.kind === "create" ? "创建分组" : "保存名称"}</Button>
-            </div>
+            <footer className="flex justify-end gap-2 border-t border-border bg-panel-header/30 px-5 py-3">
+              <Button type="button" variant="ghost" size="sm" className="h-8 rounded-sm px-3 text-xs" disabled={groupDialogBusy} onClick={() => setGroupDialog(null)}>取消</Button>
+              <Button type="submit" size="sm" className="h-8 rounded-sm px-3 text-xs" disabled={!groupDialog.name.trim() || groupDialogBusy}>{groupDialogBusy ? "正在保存…" : groupDialog.kind === "create" ? "创建分组" : "保存名称"}</Button>
+            </footer>
           </form>}
         </DialogContent>
       </Dialog>
@@ -693,13 +702,13 @@ function ProfileForm({ draft, setDraft, groups, editing, onSubmit, onCancel }: {
           rememberPassword: password ? draft.rememberPassword : false,
         });
       }} /></label>
-      <label className="col-span-2 flex items-start gap-2 rounded-sm border border-border/70 bg-panel-header/50 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-        <input type="checkbox" checked={draft.rememberPassword} disabled={!draft.password} onChange={(event) => {
+      <div className="col-span-2 flex items-start gap-2 rounded-sm border border-border/70 bg-panel-header/50 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
+        <input id="connection-profile-remember-password" type="checkbox" checked={draft.rememberPassword} disabled={!draft.password} onChange={(event) => {
           const rememberPassword = event.target.checked;
           setDraft({ ...draft, rememberPassword, password: rememberPassword ? draft.password : "" });
         }} className="mt-0.5 accent-primary" />
-        <span>安全记住密码（加密保存到本机保险库）。取消勾选会清除本次录入的密码；留空时保留原有已保存密码。首次保存会启用系统钥匙串；主密码保险库锁定时需先解锁，密码不会明文保存。</span>
-      </label>
+        <label htmlFor="connection-profile-remember-password" className="cursor-pointer">记住密码</label>
+      </div>
     </>}
     <label className="grid gap-1 text-[10px] text-muted-foreground">分组<select className="h-7 rounded-sm border border-input bg-background px-2 text-xs text-foreground" value={draft.groupId} onChange={(event) => update("groupId", event.target.value)}>
       <option value="">默认分组（兼容旧配置）</option>
@@ -722,7 +731,6 @@ function ProfileForm({ draft, setDraft, groups, editing, onSubmit, onCancel }: {
     </div>}
     <label className={`col-span-2 flex items-start gap-2 rounded-sm border border-border/70 bg-panel-header/50 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground ${draft.authMethod === "keyboardInteractive" ? "opacity-60" : ""}`}><input type="checkbox" checked={draft.autoReconnect && draft.authMethod !== "keyboardInteractive"} disabled={draft.authMethod === "keyboardInteractive"} onChange={(event) => update("autoReconnect", event.target.checked)} className="mt-0.5 accent-primary" /><span>{draft.authMethod === "keyboardInteractive" ? "多重提示认证需要用户逐项输入，不参与自动重连。" : "断线后自动重连，最多 5 次。默认关闭；生产服务器也需要单独开启。没有可用凭据时不会自动重试认证。"}</span></label>
     <div className="col-span-2 flex items-center justify-between gap-2">
-      <span className="text-[10px] text-muted-foreground">{editing ? "留空可保留已有密码；输入新密码可安全替换" : "密码仅在勾选后保存到本机保险库"}</span>
       <div className="flex gap-1"><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2" onClick={onCancel}>取消</Button><Button type="submit" size="sm" className="h-7 rounded-sm px-2">{editing ? "保存修改" : "保存配置"}</Button></div>
     </div>
   </form>;
@@ -846,7 +854,7 @@ function ConnectionGroupTree({
       onDragOver={(event) => { if (dragEnabled) event.preventDefault(); }}
       onDrop={handleRootDrop}
     >
-      <div className="flex h-6 items-center gap-1.5 text-[10px] font-medium text-muted-foreground"><Folder size={12} />顶层（拖到此处可取消分组）</div>
+      <div className="flex h-6 items-center gap-1.5 text-[10px] font-medium text-muted-foreground"><Folder size={12} />顶层</div>
       {unassigned.length > 0
         ? unassigned.map((profile) => <div
             key={profile.id}
@@ -856,7 +864,7 @@ function ConnectionGroupTree({
             onDrop={(event) => handleProfileDrop(event, profile)}
             className="cursor-grab active:cursor-grabbing"
           >{renderProfile(profile)}</div>)
-        : <p className="py-1 text-[9px] text-muted-foreground">拖动服务器到此处，将其放在分组之外。</p>}
+        : null}
     </div>
     {groups.length === 0 && <p className="px-2 py-4 text-center text-[10px] text-muted-foreground">暂无分组，请新建一个分组。</p>}
   </div>;

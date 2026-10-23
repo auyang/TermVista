@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { getUiFontScale } from "@/lib/uiFontScale";
 import {
   closeRemoteDocument,
   compareRemoteDocument,
@@ -139,6 +140,7 @@ export function RemoteEditorWorkspace({
   const activate = useEditorStore((state) => state.activate);
   const activateTerminal = useEditorStore((state) => state.activateTerminal);
   const setLanguage = useEditorStore((state) => state.setLanguage);
+  const updateSelection = useEditorStore((state) => state.updateSelection);
   const setSaveState = useEditorStore((state) => state.setSaveState);
   const markSaved = useEditorStore((state) => state.markSaved);
   const removeDocument = useEditorStore((state) => state.remove);
@@ -189,7 +191,7 @@ export function RemoteEditorWorkspace({
       renderWhitespace: "selection",
       wordWrap: "off",
       smoothScrolling: true,
-      fontSize: 12,
+      fontSize: 12 * getUiFontScale(),
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       padding: { top: 8, bottom: 8 },
       stickyScroll: { enabled: false },
@@ -209,18 +211,24 @@ export function RemoteEditorWorkspace({
     const cursorListener = editor.onDidChangeCursorPosition((event) => {
       setCursor({ line: event.position.lineNumber, column: event.position.column });
     });
+    const selectionListener = editor.onDidChangeCursorSelection((event) => {
+      const documentId = currentModelDocumentRef.current;
+      const model = editor.getModel();
+      if (documentId && model) updateSelection(documentId, model.getValueInRange(event.selection));
+    });
     const resizeObserver = new ResizeObserver(() => editor.layout());
     resizeObserver.observe(host);
     return () => {
       resizeObserver.disconnect();
       cursorListener.dispose();
+      selectionListener.dispose();
       modelSubscriptionRef.current?.dispose();
       modelSubscriptionRef.current = null;
       editor.dispose();
       editorRef.current = null;
       currentModelDocumentRef.current = null;
     };
-  }, [editorDocumentOpen]);
+  }, [editorDocumentOpen, updateSelection]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -238,6 +246,7 @@ export function RemoteEditorWorkspace({
       viewStateByDocument.set(currentModelDocumentRef.current, currentViewState);
     }
     modelSubscriptionRef.current?.dispose();
+    currentModelDocumentRef.current = document.documentId;
     editor.setModel(model);
     editor.updateOptions({ readOnly: document.readOnly || !connected || document.sessionId !== sessionId });
     const previousState = viewStateByDocument.get(document.documentId);
@@ -245,9 +254,9 @@ export function RemoteEditorWorkspace({
     modelSubscriptionRef.current = model.onDidChangeContent(() => {
       useEditorStore.getState().updateText(document.documentId, model.getValue());
     });
-    currentModelDocumentRef.current = document.documentId;
+    updateSelection(document.documentId, "");
     if (activeId !== "terminal") editor.focus();
-  }, [activeId, connected, sessionId]);
+  }, [activeId, connected, sessionId, updateSelection]);
 
   useEffect(() => {
     const documentId = activeDocument?.documentId;

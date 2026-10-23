@@ -5,6 +5,7 @@ import { GridComponent, TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { NetworkPoint } from "./monitorTypes";
 import { formatNetworkRate, toNetworkSeries } from "./networkChartModel";
+import { getUiFontScale } from "@/lib/uiFontScale";
 
 registerEChartsModules([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
@@ -86,11 +87,12 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
     const gridColor = styles.getPropertyValue("--app-border").trim() || (theme === "dark" ? "#29384a" : "#dbe3ec");
     const sendColor = styles.getPropertyValue("--monitor-send").trim() || "#f97316";
     const receiveColor = styles.getPropertyValue("--monitor-receive").trim() || "#22a06b";
+    const fontScale = getUiFontScale();
     const times = data.map((point) => point.timestamp);
     const option: EChartsCoreOption = {
       animation: false,
       backgroundColor: "transparent",
-      textStyle: { color: textColor, fontFamily: "system-ui, sans-serif", fontSize: 9 },
+      textStyle: { color: textColor, fontFamily: "system-ui, sans-serif", fontSize: 9 * fontScale },
       grid: { left: 38, right: 8, top: 8, bottom: 22 },
       tooltip: {
         trigger: "axis",
@@ -98,7 +100,7 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
         axisPointer: { type: "line", lineStyle: { color: gridColor } },
         backgroundColor: theme === "dark" ? "#172232" : "#ffffff",
         borderColor: gridColor,
-        textStyle: { color: textColor, fontSize: 10 },
+        textStyle: { color: textColor, fontSize: 10 * fontScale },
       },
       xAxis: {
         type: "time",
@@ -107,7 +109,7 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
         axisLabel: {
           hideOverlap: true,
           color: textColor,
-          fontSize: 8,
+          fontSize: 8 * fontScale,
           formatter: (value: number) => new Date(value).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" }),
         },
         axisLine: { lineStyle: { color: gridColor } },
@@ -118,7 +120,7 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
         type: "value",
         min: 0,
         scale: true,
-        axisLabel: { color: textColor, fontSize: 8, formatter: (value: number) => formatNetworkRate(value) },
+        axisLabel: { color: textColor, fontSize: 8 * fontScale, formatter: (value: number) => formatNetworkRate(value) },
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { lineStyle: { color: gridColor, type: "dashed", opacity: 0.65 } },

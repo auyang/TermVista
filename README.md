@@ -1,94 +1,92 @@
-# TermVista（端境）
+# TermVista
 
-**连接远端，尽在掌握。** TermVista 是面向 macOS 与 Windows 的 SSH 工作台，把终端、SFTP 文件管理、服务器监控、远程文件编辑和需用户授权的 AI 辅助放在同一桌面应用中。
+**Your remote workspace, in one place.** TermVista is a desktop SSH workspace for macOS and Windows, bringing terminals, SFTP file management, server monitoring, remote file editing, and user-authorized AI assistance together.
 
-[查看 0.0.2 发布说明](RELEASE_NOTES_0.0.2.md) · [浏览 GitHub Releases](https://github.com/auyang/TermVista/releases)
+[简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
-## 界面截图
+## Screenshots
 
-以下为本机浏览器预览中的未连接首页，展示亮色与暗色主题；它们不是原生 Tauri 窗口截图。
+The home screen images below are browser previews of the disconnected state, showing light and dark themes. They are not screenshots of the native Tauri window.
 
-| 亮色主题 | 暗色主题 |
+| Light theme | Dark theme |
 | --- | --- |
-| ![TermVista 未连接首页（亮色）](docs/screenshots/home-light-1440x900.png) | ![TermVista 未连接首页（暗色）](docs/screenshots/home-dark-1440x900.png) |
+| ![TermVista disconnected home in light theme](docs/screenshots/home-light-1440x900.png) | ![TermVista disconnected home in dark theme](docs/screenshots/home-dark-1440x900.png) |
 
-以下为已连接工作区及应用设置截图。
+The following images show a connected workspace and application settings.
 
-| 已连接工作区（亮色） | 已连接工作区（暗色） |
+| Connected workspace (light) | Connected workspace (dark) |
 | --- | --- |
-| ![TermVista 已连接工作区（亮色）](docs/screenshots/1.png) | ![TermVista 已连接工作区（暗色）](docs/screenshots/2.png) |
+| ![TermVista connected workspace in light theme](docs/screenshots/1.png) | ![TermVista connected workspace in dark theme](docs/screenshots/2.png) |
 
-| 关于 TermVista | 应用设置 |
+| About TermVista | Application settings |
 | --- | --- |
-| ![关于 TermVista](docs/screenshots/3.png) | ![TermVista 应用设置](docs/screenshots/4.png) |
+| ![About TermVista](docs/screenshots/3.png) | ![TermVista application settings](docs/screenshots/4.png) |
 
-## 功能
+## Features
 
-- **SSH 终端**：支持密码和 SSH 私钥认证、多标签会话、终端重连，以及与当前 PTY 共用的命令输入栏。
-- **SFTP 文件管理**：浏览远程目录；在本地与远程文件栏之间拖放、上传和下载；查看传输进度，并在失败时重试。
-- **SSH 本地端口转发**：为 MySQL、PostgreSQL、Redis 或自定义 TCP 服务配置本地隧道；转发固定监听 `127.0.0.1`，SSH 断线后自动释放端口，重连后需手动启动。
-- **服务器监控**：查看 CPU、内存、进程、网络和磁盘等远端状态。
-- **远程文件编辑**：在 Monaco 编辑器中打开远程文本文件，支持多文件标签、常见语言语法高亮、未保存提示和保存冲突检查。
-- **AI Copilot**：基于用户选择的终端输出、监控或文件内容提供只读解释和排查建议。
-- **桌面工作区**：保留终端与 SFTP 的分区工作台，支持亮色和暗色主题。
+- **SSH terminals:** Password and private-key authentication, multiple session tabs, reconnect, and a command bar that shares the active PTY.
+- **SFTP file management:** Browse remote directories, transfer files between local and remote panes with drag and drop, track transfer progress, and retry failed transfers.
+- **SSH local port forwarding:** Configure tunnels for MySQL, PostgreSQL, Redis, or custom TCP services. Listeners bind to 127.0.0.1. A tunnel stops when its SSH session disconnects or the application exits; reconnecting does not restart it automatically.
+- **Server monitoring:** View remote CPU, memory, process, network, and disk information.
+- **Remote file editing:** Open remote text files in Monaco Editor, work across multiple file tabs, use language highlighting, and review unsaved changes and remote-file conflicts.
+- **AI Copilot:** Get read-only explanations and troubleshooting suggestions from context you select and authorize.
+- **Desktop workspace:** Use terminals and SFTP in the same split workspace, with light and dark themes.
 
-## 安全说明
+## Security and privacy
 
-- SSH 主机指纹经过确认后记录；再次连接会校验指纹，指纹变化时会阻断连接并提示核验。
-- 本地端口转发仅监听 `127.0.0.1`，但本机其他进程也能访问映射服务；启动前会显示风险说明，SSH 断开或应用退出时转发停止。
-- 可将密码和私钥口令保存到本机加密凭据保险库；保存的秘密不会作为普通连接配置显示。
-- AI 不会自动执行命令或写入远程文件。发送上下文前由用户选择内容并确认，诊断操作也需要逐项授权。
-- 连接配置、可信主机记录及凭据保存在本机，不会随仓库或安装包上传。
+- TermVista records a trusted SSH host fingerprint after you confirm it. Later connections verify the fingerprint; a changed fingerprint blocks the connection and prompts you to review it.
+- SSH passwords and private-key passphrases can be saved in the local encrypted credential vault. TermVista does not fall back to storing them in plaintext.
+- AI does not execute commands or write remote files. You choose and confirm context before sending it; diagnostic actions require individual authorization.
+- Connection profiles, trusted host records, and saved credentials are stored locally and are not included in this source repository or application packages.
+- Local port forwarding listens only on 127.0.0.1. Other processes on your computer can still access a forwarded service, so review the destination before starting a tunnel.
 
-## 下载与安装
+## Download
 
-当前提供以下安装包：
+Installers are published on [GitHub Releases](https://github.com/auyang/TermVista/releases).
 
-- **Windows x64**：NSIS 安装程序（`.exe`）
-- **macOS Apple Silicon**：`.dmg`
-- **macOS Intel**：`.dmg`
+| Platform | Package |
+| --- | --- |
+| Windows x64 | NSIS installer (.exe) |
+| macOS Intel | Disk image (.dmg) |
+| macOS Apple Silicon | Disk image (.dmg) |
 
-Linux 安装包目前不提供。安装包会通过 [GitHub Releases](https://github.com/auyang/TermVista/releases) 发布。
+Linux installers are not currently provided. The v0.0.2 Windows installer is not code-signed. The macOS packages use ad-hoc signing and are not notarized, so your operating system may show a security warning when opening them.
 
-首次连接 SSH 主机时，请核对应用显示的主机公钥指纹，再决定是否信任。v0.0.2 的 Windows 安装包未做代码签名；macOS 构建使用 ad-hoc 签名且未公证，操作系统可能显示安全提示。
+## Quick start
 
-## 快速开始
+1. Download and install TermVista for your platform.
+2. Add an SSH server profile with its host, port, username, and authentication method.
+3. On the first connection, compare the displayed host-key fingerprint with a trusted source before accepting it. Saving the login credential locally is optional.
+4. Use the session tab to work in the terminal and SFTP panes. Double-click a remote text file to open it in the editor.
+5. To use AI Copilot, configure a model provider, select the context to share, and review the authorization prompt.
 
-1. 安装并启动 TermVista。
-2. 添加 SSH 服务器，填写主机、端口、用户名及认证方式。
-3. 首次连接时核对主机指纹；可按需选择是否在本机安全保存登录凭据。
-4. 在连接标签中使用终端和 SFTP；双击远程文本文件可在编辑器中打开。
-5. 如需使用 AI Copilot，先配置模型服务，再选择要发送的上下文并确认。
+## Run from source
 
-## 从源码运行
+The development environment requires Node.js 22, pnpm 10.32.1, Rust stable, and the platform dependencies required by Tauri 2.
 
-开发环境需要 Node.js 22、pnpm 10.32.1、Rust stable，以及 Tauri 2 对应操作系统的构建依赖。
+    pnpm install --frozen-lockfile
+    pnpm tauri dev
 
-```sh
-pnpm install --frozen-lockfile
-pnpm tauri dev
-```
+To run only the frontend preview, use <code>pnpm dev</code>. This does not open an SSH connection or display fabricated server-monitoring data.
 
-仅启动前端界面可运行 `pnpm dev`。该模式不建立 SSH 连接，也不提供虚构的服务器监控数据。
+## Checks
 
-## 检查
+Run the project checks with:
 
-```sh
-pnpm typecheck
-pnpm lint
-pnpm test:polish
-pnpm build
-cargo fmt --check --manifest-path src-tauri/Cargo.toml
-cargo clippy --offline --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-cargo test --offline --manifest-path src-tauri/Cargo.toml
-```
+    pnpm typecheck
+    pnpm lint
+    pnpm test:polish
+    pnpm build
+    cargo fmt --check --manifest-path src-tauri/Cargo.toml
+    cargo clippy --offline --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+    cargo test --offline --manifest-path src-tauri/Cargo.toml
 
-## 许可证
+## License
 
-TermVista 按 [Apache License 2.0](LICENSE) 发布。
+TermVista is distributed under the [Apache License 2.0](LICENSE).
 
-## 项目链接
+## Links
 
-- 源码：[github.com/auyang/TermVista](https://github.com/auyang/TermVista)
-- 问题反馈：[GitHub Issues](https://github.com/auyang/TermVista/issues)
-- 版本与安装包：[GitHub Releases](https://github.com/auyang/TermVista/releases)
+- Source code: [github.com/auyang/TermVista](https://github.com/auyang/TermVista)
+- Bug reports and feature requests: [GitHub Issues](https://github.com/auyang/TermVista/issues)
+- Installers and releases: [GitHub Releases](https://github.com/auyang/TermVista/releases)

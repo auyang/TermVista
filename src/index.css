@@ -38,8 +38,9 @@
   --terminal-action: #38d56f;
   --radius: 4px;
   --compact-control: 28px;
-  --ui-font-size: 12px;
-  --terminal-font-size: 14px;
+  --ui-font-scale: 1;
+  --ui-font-size: calc(12px * var(--ui-font-scale));
+  --terminal-font-size: calc(14px * var(--ui-font-scale));
   --background: var(--app-bg);
   --foreground: var(--app-fg);
   --border: var(--app-border);
@@ -212,6 +213,32 @@
   background: var(--app-bg);
   color: var(--app-fg);
 }
+
+/* 高像素密度显示器上把紧凑文字放大一档；不改变普通屏幕和面板布局。 */
+@media (min-resolution: 1.25dppx) {
+  :root {
+    --ui-font-scale: 1.1;
+  }
+}
+
+@media (min-resolution: 1.75dppx) {
+  :root {
+    --ui-font-scale: 1.15;
+  }
+}
+
+/* Tailwind 任意像素字号不会随根字号变化，因此单独应用同一缩放比例。 */
+[class~="text-[8px]"] { font-size: calc(8px * var(--ui-font-scale)); }
+[class~="text-[9px]"] { font-size: calc(9px * var(--ui-font-scale)); }
+[class~="text-[10px]"] { font-size: calc(10px * var(--ui-font-scale)); }
+[class~="text-[11px]"] { font-size: calc(11px * var(--ui-font-scale)); }
+[class~="text-[12px]"] { font-size: calc(12px * var(--ui-font-scale)); }
+[class~="text-[13px]"] { font-size: calc(13px * var(--ui-font-scale)); }
+[class~="text-[14px]"] { font-size: calc(14px * var(--ui-font-scale)); }
+[class~="text-[17px]"] { font-size: calc(17px * var(--ui-font-scale)); }
+[class~="text-[18px]"] { font-size: calc(18px * var(--ui-font-scale)); }
+.text-xs { font-size: calc(0.75rem * var(--ui-font-scale)); }
+.text-sm { font-size: calc(0.875rem * var(--ui-font-scale)); }
 
 :root[data-theme="light"] {
   color-scheme: light;

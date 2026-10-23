@@ -48,3 +48,16 @@ export function clearTerminal(attemptId: string) {
 export function getTerminalSelection(attemptId: string): string {
   return terminals.get(attemptId)?.getSelection() ?? "";
 }
+
+export function getTerminalRecentOutput(attemptId: string, maxLines = 80): string {
+  const terminal = terminals.get(attemptId);
+  if (!terminal || !Number.isInteger(maxLines) || maxLines < 1 || maxLines > 200) return "";
+  const buffer = terminal.buffer.active;
+  const start = Math.max(0, buffer.length - maxLines);
+  const lines: string[] = [];
+  for (let index = start; index < buffer.length; index += 1) {
+    const line = buffer.getLine(index);
+    if (line) lines.push(line.translateToString(true));
+  }
+  return lines.join("\n").trim();
+}

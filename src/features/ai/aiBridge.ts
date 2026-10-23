@@ -4,6 +4,7 @@ import type {
   AiContextPreview,
   AiPreviewRequest,
   AiProviderInput,
+  AiProviderModelOption,
   AiProviderView,
   AiStreamEvent,
 } from "@/features/ai/aiTypes";
@@ -19,6 +20,10 @@ export function saveAiProvider(input: AiProviderInput) {
 
 export function testAiProvider(providerId: string) {
   return runWithUpdateMaintenanceTask("测试 AI 服务连接", () => invoke<AiConnectionTestResult>("ai_provider_test", { providerId }));
+}
+
+export function listOllamaModels(baseUrl: string, allowInsecureHttp: boolean) {
+  return runWithUpdateMaintenanceTask("读取本地模型列表", () => invoke<AiProviderModelOption[]>("ai_ollama_models", { baseUrl, allowInsecureHttp }));
 }
 
 export function previewAiContext(request: AiPreviewRequest) {

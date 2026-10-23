@@ -74,14 +74,14 @@ function CredentialsForm({ profile, replaceTabId, notice, close }: { profile: No
             </select>
           </label>
           {method === "password" ? (
-            <label className="grid gap-1 text-[11px] text-muted-foreground">
-              密码
-              <Input autoComplete="current-password" type="password" className="h-8 rounded-sm text-xs" value={password} onChange={(event) => setPassword(event.target.value)} required />
-              <span className="mt-1 flex items-center gap-2 text-[10px]">
-                <input type="checkbox" checked={rememberCredential} onChange={(event) => setRememberCredential(event.target.checked)} className="accent-primary" />
-                安全记住密码（保存到加密保险库）
-              </span>
-            </label>
+            <div className="grid gap-1">
+              <label htmlFor="ssh-auth-password" className="text-[11px] text-muted-foreground">密码</label>
+              <Input id="ssh-auth-password" autoComplete="current-password" type="password" className="h-8 rounded-sm text-xs" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              <label htmlFor="ssh-auth-remember-password" className="mt-1 flex cursor-pointer items-center gap-2 text-[10px] text-muted-foreground">
+                <input id="ssh-auth-remember-password" type="checkbox" checked={rememberCredential} onChange={(event) => setRememberCredential(event.target.checked)} className="accent-primary" />
+                <span>记住密码</span>
+              </label>
+            </div>
           ) : method === "privateKey" ? <>
             {keyRef
               ? <p className="rounded-sm border border-border bg-muted/25 px-2 py-1.5 text-[10px] text-muted-foreground">使用连接配置中受保险库保护的 SSH 密钥。</p>
@@ -89,14 +89,14 @@ function CredentialsForm({ profile, replaceTabId, notice, close }: { profile: No
                 私钥文件路径
                 <Input className="h-8 rounded-sm font-mono text-xs" placeholder="~/.ssh/id_ed25519" value={privateKeyPath} onChange={(event) => setPrivateKeyPath(event.target.value)} required />
               </label>}
-            <label className="grid gap-1 text-[11px] text-muted-foreground">
-              私钥口令（如有）
-              <Input type="password" autoComplete="off" className="h-8 rounded-sm text-xs" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} />
-              {passphrase && <span className="mt-1 flex items-center gap-2 text-[10px]">
-                <input type="checkbox" checked={rememberCredential} onChange={(event) => setRememberCredential(event.target.checked)} className="accent-primary" />
-                安全记住私钥口令（保存到加密保险库）
-              </span>}
-            </label>
+            <div className="grid gap-1">
+              <label htmlFor="ssh-private-key-passphrase" className="text-[11px] text-muted-foreground">私钥口令（如有）</label>
+              <Input id="ssh-private-key-passphrase" type="password" autoComplete="off" className="h-8 rounded-sm text-xs" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} />
+              {passphrase && <label htmlFor="ssh-auth-remember-passphrase" className="mt-1 flex cursor-pointer items-center gap-2 text-[10px] text-muted-foreground">
+                <input id="ssh-auth-remember-passphrase" type="checkbox" checked={rememberCredential} onChange={(event) => setRememberCredential(event.target.checked)} className="accent-primary" />
+                <span>记住私钥口令</span>
+              </label>}
+            </div>
           </> : <p className="rounded-sm border border-border bg-muted/30 p-2 text-[10px] leading-4 text-muted-foreground">服务器会在连接过程中逐项请求密码、验证码或其他响应。输入内容仅用于当前 SSH 认证，不会保存或用于自动重连。</p>}
           {method !== "keyboardInteractive" && <p className="text-[10px] leading-4 text-muted-foreground">默认仅用于本次连接。勾选保存前，请先在“设置 → 连接与安全”中设置保险库。凭据仅在主机验证和登录成功后加密保存；保险库不可用时不会明文降级。</p>}
           <footer className="flex items-center justify-between gap-2 border-t border-border pt-3">

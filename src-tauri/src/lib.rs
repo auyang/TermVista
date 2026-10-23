@@ -4,7 +4,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 use ai::{
     AiRuntime, AiStreamEvent, ChatAccepted, ConnectionTestResult, ContextPreview,
-    ContextPreviewRequest, ProviderInput, ProviderView,
+    ContextPreviewRequest, ProviderInput, ProviderModelOption, ProviderView,
 };
 use connections::{
     AuditAction, AuditOutcome, ConnectionGroup, ConnectionProfile, ConnectionProfilesStore,
@@ -1213,6 +1213,15 @@ async fn ai_provider_test(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+async fn ai_ollama_models(
+    state: State<'_, Arc<AiRuntime>>,
+    base_url: String,
+    allow_insecure_http: bool,
+) -> Result<Vec<ProviderModelOption>, ai::AiError> {
+    state.ollama_models(base_url, allow_insecure_http).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
 async fn ai_context_preview(
     state: State<'_, Arc<AiRuntime>>,
     request: ContextPreviewRequest,
@@ -1512,6 +1521,20 @@ async fn editor_close(
 ) -> Result<(), EditorError> {
     editor.close_document(&document_id).await;
     Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn editor_ai_buffer_revision_register(
+    editor: State<'_, Arc<RemoteEditorService>>,
+    document_id: String,
+    session_id: String,
+    revision: u64,
+    dirty: bool,
+    current_text: String,
+) -> Result<(), EditorError> {
+    editor
+        .register_ai_buffer_revision(&document_id, &session_id, revision, dirty, &current_text)
+        .await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -1847,6 +1870,11 @@ pub fn run() {
                 Arc::clone(&sessions),
                 Arc::clone(&sftp),
             ));
+            let diagnostics = Arc::new(DiagnosticRuntime::new(
+                Arc::clone(&sessions),
+                Arc::clone(&monitor),
+                Arc::clone(&sftp),
+            ));
             let ai_config_path = app.path().app_config_dir()?.join("ai_providers.json");
             let ai = Arc::new(
                 AiRuntime::new(
@@ -1854,14 +1882,11 @@ pub fn run() {
                     Arc::clone(&sessions),
                     Arc::clone(&monitor),
                     Arc::clone(&sftp),
+                    Arc::clone(&editor),
+                    Arc::clone(&diagnostics),
                 )
                 .map_err(|error| std::io::Error::other(error.message))?,
             );
-            let diagnostics = Arc::new(DiagnosticRuntime::new(
-                Arc::clone(&sessions),
-                Arc::clone(&monitor),
-                Arc::clone(&sftp),
-            ));
             let credential_vault = Arc::new(CredentialVault::new(Arc::clone(&connection_profiles)));
             let credentials: Arc<dyn CredentialStore> = credential_vault.clone();
             app.manage(Arc::clone(&sessions));
@@ -1954,6 +1979,7 @@ pub fn run() {
             ai_provider_list,
             ai_provider_save,
             ai_provider_test,
+            ai_ollama_models,
             ai_context_preview,
             ai_chat_start,
             ai_chat_cancel,
@@ -1976,6 +2002,7 @@ pub fn run() {
             editor_reload,
             editor_rebind,
             editor_close,
+            editor_ai_buffer_revision_register,
             monitor_start,
             monitor_set_active,
             monitor_stop,

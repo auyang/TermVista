@@ -230,13 +230,13 @@ export function HomeTab() {
             <div className="compact-scrollbar max-h-[min(58vh,620px)] min-h-36 overflow-auto">
               {visibleProfiles.length === 0 ? <div className="flex min-h-36 items-center justify-center text-xs text-muted-foreground">没有符合筛选条件的服务器。</div> : (
                 <table className="w-full min-w-[620px] border-collapse text-left text-xs">
-                  <thead className="sticky top-0 z-10 h-9 bg-panel-header text-[10px] font-semibold text-muted-foreground shadow-[0_1px_0_var(--app-border)]">
-                    <tr>
-                      <th className="w-10 px-3 font-normal" scope="col"><span className="sr-only">选择</span></th>
-                      <th className="min-w-[220px] px-2" scope="col">连接名称</th>
-                      <th className="w-[31%] px-2" scope="col">上次使用路径</th>
-                      <th className="w-[17%] px-2" scope="col">用户</th>
-                      <th className="w-12 px-2 text-center" scope="col"><span className="sr-only">操作</span></th>
+                  <thead className="sticky top-0 z-10 bg-panel-header text-[10px] font-semibold text-muted-foreground shadow-[0_1px_0_var(--app-border)]">
+                    <tr className="h-9">
+                      <th className="h-9 w-10 px-3 py-0 text-center align-middle font-normal leading-none" scope="col"><span className="sr-only">选择</span></th>
+                      <th className="h-9 min-w-[220px] px-2 py-0 align-middle leading-none" scope="col">连接名称</th>
+                      <th className="h-9 w-[31%] px-2 py-0 align-middle leading-none" scope="col">上次使用路径</th>
+                      <th className="h-9 w-[17%] px-2 py-0 align-middle leading-none" scope="col">用户</th>
+                      <th className="h-9 w-12 px-2 py-0 text-center align-middle leading-none" scope="col"><span className="sr-only">操作</span></th>
                     </tr>
                   </thead>
                   <tbody>

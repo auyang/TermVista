@@ -71,7 +71,7 @@ export async function approveAndStartDiagnosticReport(preview: DiagnosticReportP
   const accepted = await generateDiagnosticReport(grant.shareGrantId, channel);
   acceptedRequestId = accepted.requestId;
   reportChannels.set(acceptedRequestId, channel);
-  useAiStore.getState().beginStream(preview.sessionId, acceptedRequestId, `分析 ${preview.host} 的只读 SSH 诊断结果`);
+  useAiStore.getState().beginStream(preview.sessionId, acceptedRequestId, `分析 ${preview.host} 的只读 SSH 诊断结果`, "diagnose");
   for (const event of earlyEvents) applyAiEvent(event, preview.sessionId, acceptedRequestId);
   return acceptedRequestId;
 }
@@ -102,8 +102,9 @@ function applyAiEvent(event: AiStreamEvent, sessionId: string, requestId: string
   if (event.sessionId !== sessionId || event.requestId !== requestId) return;
   const store = useAiStore.getState();
   if (event.type === "delta") store.applyDelta(event.sessionId, event.requestId, event.text);
+  if (event.type === "usage") store.applyUsage(event.sessionId, event.requestId, event.inputTokens, event.outputTokens);
   if (event.type === "completed") {
-    store.finishStream(event.sessionId, event.requestId, "complete");
+    store.finishStream(event.sessionId, event.requestId, "complete", undefined, event.elapsedMs);
     window.setTimeout(() => reportChannels.delete(requestId), 30_000);
   }
   if (event.type === "cancelled") {

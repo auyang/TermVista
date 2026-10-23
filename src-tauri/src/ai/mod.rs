@@ -7,7 +7,7 @@ mod runtime;
 pub(crate) use redaction::{redact_sensitive_text, truncate_utf8};
 
 pub use models::{
-    AiError, AiProviderKind, AiStreamEvent, ChatAccepted, ConnectionTestResult, ContextPreview,
-    ContextPreviewRequest, ProviderInput, ProviderView,
+    AiError, AiProviderKind, AiStreamEvent, AiTaskMode, ChatAccepted, ConnectionTestResult,
+    ContextPreview, ContextPreviewRequest, ProviderInput, ProviderModelOption, ProviderView,
 };
 pub use runtime::AiRuntime;

@@ -180,6 +180,9 @@ struct DocumentState {
     endpoint_port: u16,
     endpoint_username: String,
     host_key: HostKeyIdentity,
+    ai_revision: u64,
+    ai_buffer_hash: String,
+    ai_dirty: bool,
 }
 
 #[derive(Clone)]
@@ -240,6 +243,9 @@ impl RemoteEditorService {
             endpoint_port: binding.summary.port,
             endpoint_username: binding.summary.username,
             host_key: binding.identity,
+            ai_revision: 0,
+            ai_buffer_hash: hash_hex(public.text.as_deref().unwrap_or_default().as_bytes()),
+            ai_dirty: false,
         };
         inner.open_paths.insert(dedupe_key, document_id.clone());
         inner.documents.insert(document_id, state);
@@ -528,6 +534,115 @@ impl RemoteEditorService {
             .completed_requests
             .insert(result_key, result.clone());
         Ok(result)
+    }
+
+    pub async fn register_ai_buffer_revision(
+        &self,
+        document_id: &str,
+        session_id: &str,
+        revision: u64,
+        dirty: bool,
+        current_text: &str,
+    ) -> Result<(), EditorError> {
+        if current_text.len() > LARGE_EDIT_LIMIT {
+            return Err(EditorError::new(
+                EditorErrorCode::TooLarge,
+                "编辑缓冲超过 10 MiB 上限，不能用于 AI 上下文。",
+            ));
+        }
+        let binding = self
+            .ssh
+            .security_binding(session_id)
+            .await
+            .map_err(|error| EditorError::new(EditorErrorCode::Disconnected, error.message))?;
+        let mut inner = self.inner.lock().await;
+        let state = inner.documents.get_mut(document_id).ok_or_else(|| {
+            EditorError::new(EditorErrorCode::NotFound, "远程编辑文档已关闭或不存在。")
+        })?;
+        if state.public.session_id != session_id
+            || state.host_key.fingerprint_sha256 != binding.identity.fingerprint_sha256
+        {
+            return Err(EditorError::new(
+                EditorErrorCode::InvalidRequest,
+                "编辑文档与当前 SSH 会话或主机身份不匹配。",
+            ));
+        }
+        if revision < state.ai_revision {
+            return Err(EditorError::new(
+                EditorErrorCode::InvalidRequest,
+                "编辑缓冲版本已更新，请重新预览当前内容。",
+            ));
+        }
+        state.ai_revision = revision;
+        state.ai_buffer_hash = hash_hex(current_text.as_bytes());
+        state.ai_dirty = dirty;
+        Ok(())
+    }
+
+    pub async fn unregister_ai_buffer_revision(&self, document_id: &str) {
+        if let Some(state) = self.inner.lock().await.documents.get_mut(document_id) {
+            state.ai_revision = state.ai_revision.saturating_add(1);
+            state.ai_dirty = false;
+            state.ai_buffer_hash.clear();
+        }
+    }
+
+    pub async fn validate_ai_buffer_revision(
+        &self,
+        document_id: &str,
+        session_id: &str,
+        revision: u64,
+        require_dirty: bool,
+        expected_text: Option<&str>,
+    ) -> Result<(String, String), EditorError> {
+        let binding = self
+            .ssh
+            .security_binding(session_id)
+            .await
+            .map_err(|error| EditorError::new(EditorErrorCode::Disconnected, error.message))?;
+        let state = self
+            .inner
+            .lock()
+            .await
+            .documents
+            .get(document_id)
+            .cloned()
+            .ok_or_else(|| {
+                EditorError::new(EditorErrorCode::NotFound, "远程编辑文档已关闭或不存在。")
+            })?;
+        if state.public.session_id != session_id
+            || state.host_key.fingerprint_sha256 != binding.identity.fingerprint_sha256
+        {
+            return Err(EditorError::new(
+                EditorErrorCode::InvalidRequest,
+                "编辑文档与当前 SSH 会话或主机身份不匹配。",
+            ));
+        }
+        if state.public.sensitive {
+            return Err(EditorError::new(
+                EditorErrorCode::InvalidRequest,
+                "敏感远程文件不能作为 AI 上下文。",
+            ));
+        }
+        if state.ai_revision != revision {
+            return Err(EditorError::new(
+                EditorErrorCode::Conflict,
+                "编辑缓冲在预览后发生变化，请重新预览。",
+            ));
+        }
+        if require_dirty && !state.ai_dirty {
+            return Err(EditorError::new(
+                EditorErrorCode::Conflict,
+                "当前编辑缓冲已保存或不再处于未保存状态。",
+            ));
+        }
+        if expected_text.is_some_and(|text| hash_hex(text.as_bytes()) != state.ai_buffer_hash) {
+            return Err(EditorError::new(
+                EditorErrorCode::Conflict,
+                "编辑缓冲内容与注册版本不一致，请重新预览。",
+            ));
+        }
+        Ok((state.public.canonical_path, state.ai_buffer_hash))
     }
 
     pub async fn save_as(
@@ -1663,17 +1778,25 @@ fn is_editor_staging_path(path: &str) -> bool {
 
 fn is_sensitive_path(path: &str) -> bool {
     let normalized = path.to_ascii_lowercase();
+    let segments = normalized
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>();
+    let file_name = segments.last().copied().unwrap_or_default();
     normalized == "/etc"
         || normalized.starts_with("/etc/")
-        || normalized.contains("/.ssh/")
-        || normalized.ends_with("/.ssh")
-        || normalized.ends_with(".env")
-        || normalized.ends_with(".pem")
-        || normalized.ends_with(".key")
-        || normalized.ends_with(".p12")
-        || normalized.ends_with(".pfx")
-        || normalized.ends_with(".crt")
-        || normalized.ends_with(".cer")
+        || segments
+            .iter()
+            .any(|segment| matches!(*segment, ".ssh" | ".gnupg" | ".aws" | ".azure" | ".kube"))
+        || file_name == ".env"
+        || file_name.starts_with(".env.")
+        || file_name.starts_with("id_rsa")
+        || file_name.starts_with("id_ed25519")
+        || [
+            ".pem", ".key", ".p12", ".pfx", ".p7b", ".p7c", ".crt", ".cer",
+        ]
+        .iter()
+        .any(|suffix| file_name.ends_with(suffix))
 }
 
 #[cfg(test)]
@@ -1700,6 +1823,8 @@ mod tests {
         assert!(is_sensitive_path("/etc/ssh/sshd_config"));
         assert!(is_sensitive_path("/home/user/.ssh/config"));
         assert!(is_sensitive_path("/srv/app/.env"));
+        assert!(is_sensitive_path("/srv/app/.env.production"));
+        assert!(is_sensitive_path("/home/user/.aws/credentials"));
         assert!(!is_sensitive_path("/srv/app/config.yaml"));
     }
 }

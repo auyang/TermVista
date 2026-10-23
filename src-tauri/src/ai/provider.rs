@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashSet, net::IpAddr, time::Duration};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
-use super::models::ProviderConfig;
+use super::models::{AiProviderKind, ProviderConfig, ProviderModelOption};
 
 const MAX_SSE_FRAME_BYTES: usize = 64 * 1024;
 const MAX_STREAM_OUTPUT_BYTES: usize = 1024 * 1024;
@@ -40,6 +40,18 @@ impl ProviderError {
 
 #[async_trait]
 pub trait ModelProvider: Send + Sync {
+    async fn list_models(
+        &self,
+        config: &ProviderConfig,
+        api_key: &str,
+    ) -> Result<Vec<ProviderModelOption>, ProviderError> {
+        let _ = (config, api_key);
+        Err(ProviderError::new(
+            "modelListUnsupported",
+            "此模型服务暂不支持读取模型列表，请手动填写模型名称。",
+        ))
+    }
+
     async fn test_connection(
         &self,
         config: &ProviderConfig,
@@ -99,8 +111,12 @@ impl OpenAiCompatibleProvider {
         Self::endpoint(config).map(|_| ())
     }
 
-    fn status_error(status: StatusCode) -> ProviderError {
+    fn status_error(status: StatusCode, kind: AiProviderKind) -> ProviderError {
         match status.as_u16() {
+            401 | 403 if kind == AiProviderKind::Ollama => ProviderError::new(
+                "accessDenied",
+                "Ollama 服务拒绝了请求，请检查服务地址和访问控制。",
+            ),
             401 | 403 => {
                 ProviderError::new("authentication", "模型服务拒绝了凭据，请检查 API Key。")
             }
@@ -111,6 +127,14 @@ impl OpenAiCompatibleProvider {
                 "模型服务返回重定向，出于安全考虑已阻止。",
             ),
             500..=599 => ProviderError::new("providerUnavailable", "模型服务暂时不可用。"),
+            404 if kind == AiProviderKind::Ollama => ProviderError::new(
+                "modelNotFound",
+                "Ollama 未找到此模型；请检查模型名称或先在 Ollama 中下载模型。",
+            ),
+            404 => ProviderError::new(
+                "endpointNotFound",
+                "模型服务地址或 API 路径不存在，请检查服务商设置。",
+            ),
             _ => ProviderError::new("providerRejected", "模型服务拒绝了请求，请检查服务商设置。"),
         }
     }
@@ -124,20 +148,90 @@ impl OpenAiCompatibleProvider {
             ProviderError::new("network", "模型网络请求失败。")
         }
     }
+
+    fn with_optional_bearer(
+        request: reqwest::RequestBuilder,
+        api_key: &str,
+    ) -> reqwest::RequestBuilder {
+        if api_key.is_empty() {
+            request
+        } else {
+            request.bearer_auth(api_key)
+        }
+    }
+
+    async fn read_json_limited(
+        response: reqwest::Response,
+        max_bytes: usize,
+    ) -> Result<Value, ProviderError> {
+        if response
+            .content_length()
+            .is_some_and(|length| length > max_bytes as u64)
+        {
+            return Err(ProviderError::new(
+                "invalidResponse",
+                "模型服务返回了超出大小限制的响应。",
+            ));
+        }
+        let mut stream = response.bytes_stream();
+        let mut bytes = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|error| Self::request_error(&error))?;
+            if bytes.len().saturating_add(chunk.len()) > max_bytes {
+                return Err(ProviderError::new(
+                    "invalidResponse",
+                    "模型服务返回了超出大小限制的响应。",
+                ));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        serde_json::from_slice(&bytes)
+            .map_err(|_| ProviderError::new("invalidResponse", "模型服务返回了无效 JSON。"))
+    }
 }
 
 #[async_trait]
 impl ModelProvider for OpenAiCompatibleProvider {
+    async fn list_models(
+        &self,
+        config: &ProviderConfig,
+        api_key: &str,
+    ) -> Result<Vec<ProviderModelOption>, ProviderError> {
+        let endpoint = models_endpoint(config)?;
+        let response = Self::with_optional_bearer(self.client.get(endpoint), api_key)
+            .timeout(Duration::from_secs(config.timeout_seconds))
+            .send()
+            .await
+            .map_err(|error| Self::request_error(&error))?;
+        if !response.status().is_success() {
+            return Err(Self::status_error(response.status(), config.kind));
+        }
+        let value = Self::read_json_limited(response, MAX_CONNECTION_TEST_BYTES).await?;
+        let models = value
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or_else(|| ProviderError::new("invalidResponse", "模型列表响应格式无效。"))?;
+        let mut seen = HashSet::new();
+        Ok(models
+            .iter()
+            .filter_map(|item| item.get("id").and_then(Value::as_str))
+            .filter(|id| !id.is_empty() && seen.insert((*id).to_owned()))
+            .map(|id| ProviderModelOption {
+                id: id.to_owned(),
+                streaming: None,
+                tool_calling: None,
+                structured_output: None,
+            })
+            .collect())
+    }
+
     async fn test_connection(
         &self,
         config: &ProviderConfig,
         api_key: &str,
     ) -> Result<(), ProviderError> {
         let endpoint = Self::endpoint(config)?;
-        let request = self
-            .client
-            .post(endpoint)
-            .bearer_auth(api_key)
+        let request = Self::with_optional_bearer(self.client.post(endpoint), api_key)
             .timeout(Duration::from_secs(config.timeout_seconds))
             .json(&json!({
                 "model": config.model,
@@ -150,31 +244,9 @@ impl ModelProvider for OpenAiCompatibleProvider {
             .await
             .map_err(|error| Self::request_error(&error))?;
         if !response.status().is_success() {
-            return Err(Self::status_error(response.status()));
+            return Err(Self::status_error(response.status(), config.kind));
         }
-        if response
-            .content_length()
-            .is_some_and(|length| length > MAX_CONNECTION_TEST_BYTES as u64)
-        {
-            return Err(ProviderError::new(
-                "invalidResponse",
-                "模型连接测试返回了超出大小限制的响应。",
-            ));
-        }
-        let mut response_stream = response.bytes_stream();
-        let mut response_body = Vec::new();
-        while let Some(chunk) = response_stream.next().await {
-            let chunk = chunk.map_err(|error| Self::request_error(&error))?;
-            if response_body.len().saturating_add(chunk.len()) > MAX_CONNECTION_TEST_BYTES {
-                return Err(ProviderError::new(
-                    "invalidResponse",
-                    "模型连接测试返回了超出大小限制的响应。",
-                ));
-            }
-            response_body.extend_from_slice(&chunk);
-        }
-        let value: Value = serde_json::from_slice(&response_body)
-            .map_err(|_| ProviderError::new("invalidResponse", "模型服务返回了无效的测试响应。"))?;
+        let value = Self::read_json_limited(response, MAX_CONNECTION_TEST_BYTES).await?;
         if value
             .get("choices")
             .and_then(Value::as_array)
@@ -198,10 +270,7 @@ impl ModelProvider for OpenAiCompatibleProvider {
         on_usage: &mut (dyn FnMut(ProviderUsage) + Send),
     ) -> Result<(), ProviderError> {
         let endpoint = Self::endpoint(config)?;
-        let request = self
-            .client
-            .post(endpoint)
-            .bearer_auth(api_key)
+        let request = Self::with_optional_bearer(self.client.post(endpoint), api_key)
             .header(reqwest::header::ACCEPT, "text/event-stream")
             .timeout(Duration::from_secs(config.timeout_seconds))
             .json(&json!({
@@ -215,7 +284,7 @@ impl ModelProvider for OpenAiCompatibleProvider {
             result = request.send() => result.map_err(|error| Self::request_error(&error))?,
         };
         if !response.status().is_success() {
-            return Err(Self::status_error(response.status()));
+            return Err(Self::status_error(response.status(), config.kind));
         }
 
         let mut body = response.bytes_stream();
@@ -371,16 +440,199 @@ fn parse_sse_frame(frame: &str) -> Result<Option<StreamUpdate>, ProviderError> {
     }))
 }
 
-#[derive(Clone, Copy)]
-pub struct ReservedOllamaProvider;
+#[derive(Clone)]
+pub struct OllamaProvider {
+    compatible: OpenAiCompatibleProvider,
+}
 
-impl ReservedOllamaProvider {
-    pub fn unsupported(&self) -> ProviderError {
-        ProviderError::new(
-            "unsupportedProvider",
-            "Ollama 适配器已预留，尚未在 Phase 3A 启用。",
-        )
+impl OllamaProvider {
+    pub fn new() -> Result<Self, ProviderError> {
+        Ok(Self {
+            compatible: OpenAiCompatibleProvider::new()?,
+        })
     }
+
+    pub fn validate_endpoint(config: &ProviderConfig) -> Result<(), ProviderError> {
+        let normalized = Self::normalized_config(config)?;
+        OpenAiCompatibleProvider::validate_endpoint(&normalized)
+    }
+
+    fn normalized_config(config: &ProviderConfig) -> Result<ProviderConfig, ProviderError> {
+        let mut normalized = config.clone();
+        let mut base = Url::parse(config.base_url.trim())
+            .map_err(|_| ProviderError::new("invalidProvider", "Ollama 服务地址无效。"))?;
+        if !matches!(base.scheme(), "https" | "http")
+            || base.host_str().is_none()
+            || !base.username().is_empty()
+            || base.password().is_some()
+            || base.query().is_some()
+            || base.fragment().is_some()
+        {
+            return Err(ProviderError::new(
+                "invalidProvider",
+                "Ollama 地址需为有效 HTTP(S) URL，且不能包含账号、查询参数或片段。",
+            ));
+        }
+        let loopback = is_loopback_host(base.host_str().unwrap_or_default());
+        if base.scheme() == "http" && !loopback && !config.allow_insecure_http {
+            return Err(ProviderError::new(
+                "invalidProvider",
+                "本机 Ollama 可使用回环 HTTP；远程 Ollama 的 HTTP 必须明确确认，建议改用 HTTPS。",
+            ));
+        }
+        let path = base.path().trim_end_matches('/');
+        if path.is_empty() {
+            base.set_path("/v1");
+        } else if !path.ends_with("/v1") {
+            base.set_path(&format!("{path}/v1"));
+        }
+        normalized.base_url = base.to_string().trim_end_matches('/').to_owned();
+        normalized.allow_insecure_http =
+            base.scheme() == "http" && (loopback || config.allow_insecure_http);
+        Ok(normalized)
+    }
+
+    fn native_api_endpoint(config: &ProviderConfig, route: &str) -> Result<Url, ProviderError> {
+        let normalized = Self::normalized_config(config)?;
+        let mut base = Url::parse(&normalized.base_url)
+            .map_err(|_| ProviderError::new("invalidProvider", "Ollama 服务地址无效。"))?;
+        let path = base.path().trim_end_matches("/v1").trim_end_matches('/');
+        base.set_path(&format!("{path}{route}"));
+        Ok(base)
+    }
+
+    async fn show_model_capabilities(
+        &self,
+        config: &ProviderConfig,
+        model: &str,
+    ) -> Option<HashSet<String>> {
+        let endpoint = Self::native_api_endpoint(config, "/api/show").ok()?;
+        let response = self
+            .compatible
+            .client
+            .post(endpoint)
+            .timeout(Duration::from_secs(config.timeout_seconds))
+            .json(&json!({ "model": model, "verbose": false }))
+            .send()
+            .await
+            .ok()?;
+        if !response.status().is_success() {
+            return None;
+        }
+        let value =
+            OpenAiCompatibleProvider::read_json_limited(response, MAX_CONNECTION_TEST_BYTES)
+                .await
+                .ok()?;
+        value
+            .get("capabilities")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+    }
+}
+
+#[async_trait]
+impl ModelProvider for OllamaProvider {
+    async fn list_models(
+        &self,
+        config: &ProviderConfig,
+        _api_key: &str,
+    ) -> Result<Vec<ProviderModelOption>, ProviderError> {
+        let normalized = Self::normalized_config(config)?;
+        let endpoint = Self::native_api_endpoint(&normalized, "/api/tags")?;
+        let response = self
+            .compatible
+            .client
+            .get(endpoint)
+            .timeout(Duration::from_secs(config.timeout_seconds))
+            .send()
+            .await
+            .map_err(|error| OpenAiCompatibleProvider::request_error(&error))?;
+        if !response.status().is_success() {
+            return Err(OpenAiCompatibleProvider::status_error(
+                response.status(),
+                AiProviderKind::Ollama,
+            ));
+        }
+        let value =
+            OpenAiCompatibleProvider::read_json_limited(response, MAX_CONNECTION_TEST_BYTES)
+                .await?;
+        let models = value
+            .get("models")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                ProviderError::new("invalidResponse", "Ollama 模型列表响应格式无效。")
+            })?;
+        let mut names = Vec::new();
+        let mut seen = HashSet::new();
+        for item in models.iter().take(100) {
+            let name = item
+                .get("model")
+                .or_else(|| item.get("name"))
+                .and_then(Value::as_str);
+            if let Some(name) =
+                name.filter(|name| !name.is_empty() && seen.insert((*name).to_owned()))
+            {
+                names.push(name.to_owned());
+            }
+        }
+
+        let mut options = Vec::with_capacity(names.len());
+        for id in names {
+            let capabilities = self.show_model_capabilities(&normalized, &id).await;
+            options.push(ProviderModelOption {
+                id,
+                streaming: Some(true),
+                tool_calling: capabilities.map(|items| items.contains("tools")),
+                structured_output: None,
+            });
+        }
+        Ok(options)
+    }
+
+    async fn test_connection(
+        &self,
+        config: &ProviderConfig,
+        _api_key: &str,
+    ) -> Result<(), ProviderError> {
+        let normalized = Self::normalized_config(config)?;
+        self.compatible.test_connection(&normalized, "").await
+    }
+
+    async fn stream_chat(
+        &self,
+        config: &ProviderConfig,
+        _api_key: &str,
+        messages: &[ProviderMessage],
+        cancellation: CancellationToken,
+        on_delta: &mut (dyn FnMut(String) + Send),
+        on_usage: &mut (dyn FnMut(ProviderUsage) + Send),
+    ) -> Result<(), ProviderError> {
+        let normalized = Self::normalized_config(config)?;
+        self.compatible
+            .stream_chat(&normalized, "", messages, cancellation, on_delta, on_usage)
+            .await
+    }
+}
+
+fn models_endpoint(config: &ProviderConfig) -> Result<Url, ProviderError> {
+    let mut endpoint = Url::parse(config.base_url.trim())
+        .map_err(|_| ProviderError::new("invalidProvider", "模型服务地址无效。"))?;
+    let path = format!("{}/models", endpoint.path().trim_end_matches('/'));
+    endpoint.set_path(&path);
+    Ok(endpoint)
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
 }
 
 #[cfg(test)]
@@ -394,8 +646,8 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::{
-        ModelProvider, OpenAiCompatibleProvider, ProviderConfig, ProviderMessage, ProviderUsage,
-        find_frame_end, parse_sse_frame,
+        ModelProvider, OllamaProvider, OpenAiCompatibleProvider, ProviderConfig, ProviderMessage,
+        ProviderUsage, find_frame_end, parse_sse_frame,
     };
     use crate::ai::models::AiProviderKind;
 
@@ -411,7 +663,7 @@ mod tests {
         }
     }
 
-    async fn read_request(stream: &mut TcpStream) {
+    async fn read_http_request(stream: &mut TcpStream) -> String {
         let mut bytes = Vec::new();
         let mut chunk = [0u8; 2048];
         loop {
@@ -441,8 +693,16 @@ mod tests {
                 break;
             }
         }
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+
+    async fn read_request(stream: &mut TcpStream) {
         // 请求头只用于确保测试服务完整接收请求；测试不会打印或存储 Authorization。
-        assert!(String::from_utf8_lossy(&bytes).starts_with("POST /v1/chat/completions "));
+        assert!(
+            read_http_request(stream)
+                .await
+                .starts_with("POST /v1/chat/completions ")
+        );
     }
 
     async fn accept_request(listener: &TcpListener) -> TcpStream {
@@ -648,6 +908,84 @@ mod tests {
             .await
             .expect("有效的 OpenAI 兼容响应通过连接测试");
         server.await.expect("mock 服务完成");
+    }
+
+    #[tokio::test]
+    async fn ollama_model_discovery_reads_installed_models_and_capabilities_without_api_key() {
+        use super::OllamaProvider;
+
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定 Ollama 协议测试服务");
+        let address = listener.local_addr().expect("取得测试服务地址");
+        let server = tokio::spawn(async move {
+            let (mut tags_stream, _) = listener.accept().await.expect("接收模型列表请求");
+            let tags_request = read_http_request(&mut tags_stream).await;
+            assert!(tags_request.starts_with("GET /api/tags "));
+            assert!(!tags_request.to_ascii_lowercase().contains("authorization:"));
+            let tags = br#"{"models":[{"name":"qwen2.5:3b","model":"qwen2.5:3b"}] }"#;
+            tags_stream
+                .write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", tags.len()).as_bytes())
+                .await
+                .expect("写入模型列表响应头");
+            tags_stream.write_all(tags).await.expect("写入模型列表响应");
+
+            let (mut show_stream, _) = listener.accept().await.expect("接收模型能力请求");
+            let show_request = read_http_request(&mut show_stream).await;
+            assert!(show_request.starts_with("POST /api/show "));
+            assert!(show_request.contains("qwen2.5:3b"));
+            assert!(!show_request.to_ascii_lowercase().contains("authorization:"));
+            let capabilities = br#"{"capabilities":["completion","tools"]}"#;
+            show_stream
+                .write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", capabilities.len()).as_bytes())
+                .await
+                .expect("写入能力响应头");
+            show_stream
+                .write_all(capabilities)
+                .await
+                .expect("写入能力响应");
+        });
+
+        let provider = OllamaProvider::new().expect("构造 Ollama provider");
+        let config = ProviderConfig {
+            id: "ollama-local-test".to_owned(),
+            name: "Ollama loopback 测试".to_owned(),
+            kind: AiProviderKind::Ollama,
+            base_url: format!("http://{address}"),
+            model: "qwen2.5:3b".to_owned(),
+            timeout_seconds: 10,
+            allow_insecure_http: false,
+        };
+        let models = provider
+            .list_models(&config, "must-not-be-sent")
+            .await
+            .expect("读取 Ollama 模型");
+        server.await.expect("协议服务完成");
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id, "qwen2.5:3b");
+        assert_eq!(models[0].streaming, Some(true));
+        assert_eq!(models[0].tool_calling, Some(true));
+    }
+
+    #[tokio::test]
+    async fn unavailable_local_ollama_returns_a_clear_network_error() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("绑定临时回环端口");
+        let address = listener.local_addr().expect("读取临时端口");
+        drop(listener);
+        let mut config = local_config(address);
+        config.kind = AiProviderKind::Ollama;
+        config.base_url = format!("http://{address}");
+        let provider = OllamaProvider::new().expect("构造 Ollama provider");
+
+        let error = provider
+            .list_models(&config, "")
+            .await
+            .expect_err("没有监听服务时不能返回模型列表");
+
+        assert_eq!(error.code, "network");
+        assert!(error.message.contains("无法连接到模型服务"));
     }
 
     #[tokio::test]

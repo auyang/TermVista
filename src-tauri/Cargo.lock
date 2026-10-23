@@ -76,6 +76,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "glob",
+ "idna",
  "keyring",
  "objc2",
  "objc2-app-kit",

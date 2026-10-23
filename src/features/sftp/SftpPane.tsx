@@ -451,10 +451,12 @@ export function SftpPane({ collapsed, onToggleCollapse, onOpenRemoteFile }: Sftp
   const [retryCount, setRetryCount] = useState(0);
   const [dropTarget, setDropTarget] = useState<SftpDropTarget | null>(null);
   const [dropCount, setDropCount] = useState(0);
-  const [localFileClipboard, setLocalFileClipboard] = useState<{ grantId: string; paths: string[] } | null>(null);
+  const localFileClipboardRef = useRef<{ grantId: string; paths: string[] } | null>(null);
   const dropActionsRef = useRef<DropActions | null>(null);
 
-  useEffect(() => setLocalFileClipboard(null), [sessionId]);
+  useEffect(() => {
+    localFileClipboardRef.current = null;
+  }, [sessionId]);
 
   useEffect(() => {
     let disposed = false;
@@ -674,7 +676,7 @@ export function SftpPane({ collapsed, onToggleCollapse, onOpenRemoteFile }: Sftp
     } catch (error) {
       toast.error(`无法从系统文件管理器上传：${errorMessage(error)}`);
     }
-  }, [context?.path, ready, sessionId, startTransfer]);
+  }, [context?.path, ready, sessionId, sshSession?.state, startTransfer]);
 
   const copyLocalSelection = () => {
     if (!sessionId || !context?.localGrantId) return;
@@ -685,12 +687,13 @@ export function SftpPane({ collapsed, onToggleCollapse, onOpenRemoteFile }: Sftp
       toast.message("请先在本地文件栏选择要上传的文件。");
       return;
     }
-    setLocalFileClipboard({ grantId: context.localGrantId, paths });
+    localFileClipboardRef.current = { grantId: context.localGrantId, paths };
     toast.success(`已复制 ${paths.length} 个本地文件；切到远程文件列表按 ${/Mac/i.test(navigator.userAgent) ? "⌘V" : "Ctrl+V"} 上传。`);
   };
 
   const pasteFilesToRemote = async () => {
     if (!sessionId || !ready || !context) return;
+    const localFileClipboard = localFileClipboardRef.current;
     if (localFileClipboard) {
       await startTransfer("upload", localFileClipboard.paths, context.path, localFileClipboard.grantId);
       return;

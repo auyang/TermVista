@@ -10,29 +10,29 @@ pub fn read_file_paths() -> Result<Vec<String>, String> {
         let mut result = Vec::new();
         if let Some(items) = pasteboard.pasteboardItems() {
             for item in &*items {
-                if let Some(url) = item.stringForType(NSPasteboardTypeFileURL) {
-                    if let Some(path) = NSURL::URLWithString(&url).and_then(|url| url.path()) {
-                        result.push(path.to_string());
-                    }
+                if let Some(url) = item.stringForType(NSPasteboardTypeFileURL)
+                    && let Some(path) = NSURL::URLWithString(&url).and_then(|url| url.path())
+                {
+                    result.push(path.to_string());
                 }
             }
         }
 
         if result.is_empty() {
             let file_types = NSArray::arrayWithObject(NSFilenamesPboardType);
-            if pasteboard.availableTypeFromArray(&file_types).is_some() {
-                if let Some(value) = pasteboard.propertyListForType(NSFilenamesPboardType) {
-                    let paths = value
-                        .downcast::<NSArray<AnyObject>>()
-                        .map_err(|_| "无法识别剪贴板中的本地文件列表。".to_owned())?;
-                    for item in &*paths {
-                        let path = item
-                            .downcast::<NSString>()
-                            .map_err(|_| "剪贴板中的文件路径格式无效。".to_owned())?;
-                        let path = path.to_string();
-                        if !path.is_empty() {
-                            result.push(path);
-                        }
+            if pasteboard.availableTypeFromArray(&file_types).is_some()
+                && let Some(value) = pasteboard.propertyListForType(NSFilenamesPboardType)
+            {
+                let paths = value
+                    .downcast::<NSArray<AnyObject>>()
+                    .map_err(|_| "无法识别剪贴板中的本地文件列表。".to_owned())?;
+                for item in &*paths {
+                    let path = item
+                        .downcast::<NSString>()
+                        .map_err(|_| "剪贴板中的文件路径格式无效。".to_owned())?;
+                    let path = path.to_string();
+                    if !path.is_empty() {
+                        result.push(path);
                     }
                 }
             }

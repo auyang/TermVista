@@ -82,4 +82,4 @@ export type MonitorEvent =
 
 export type MonitorSubscriptionId = { subscriptionId: string };
 
-export type NetworkPoint = { sampledAt: string; rx: number; tx: number };
+export type NetworkPoint = { sampledAt: string; rx: number | null; tx: number | null };

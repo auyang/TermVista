@@ -484,6 +484,22 @@ export function RemoteEditorWorkspace({
     ? languageOptions.filter((item) => item.id === activeDocument.languageId || item.id !== "plaintext")
     : languageOptions;
   const canSave = Boolean(activeDocument?.dirty && connected && activeDocument.sessionId === sessionId && !activeDocument.readOnly && activeDocument.sha256);
+  const sameSessionOnline = Boolean(activeDocument && connected && activeDocument.sessionId === sessionId);
+  const saveStatus = !activeDocument
+    ? ""
+    : activeDocument.saveState === "saving"
+      ? "正在保存"
+      : activeDocument.saveState === "conflict"
+        ? "远端已变化"
+        : activeDocument.saveState === "offline" || (activeDocument.dirty && !sameSessionOnline)
+          ? "已离线（草稿保留）"
+          : activeDocument.saveState === "error"
+            ? "保存失败（草稿保留）"
+            : activeDocument.dirty
+              ? "有未保存修改"
+              : activeDocument.saveState === "saved"
+                ? "已保存并校验"
+                : sameSessionOnline ? "远程文件已校验" : "已离线";
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col" aria-label="终端与远程编辑工作区" data-monaco-language-count={registeredLanguageCount}>
       <div className="flex h-7 shrink-0 items-stretch border-b border-border bg-panel-header px-1" role="tablist" aria-label="终端和编辑文件">
@@ -495,7 +511,7 @@ export function RemoteEditorWorkspace({
             <button type="button" role="tab" aria-selected={activeId === tab.documentId} title={`${connectionName} / ${tab.canonicalPath}`} className="flex h-full min-w-0 items-center gap-1 px-2 text-[10px]" onClick={() => activate(connectionId, tab.documentId)}>
               <FileCode2 size={11} className="shrink-0 text-accent" />
               <span className="truncate">{tab.displayName}</span>
-              {tab.dirty && <span className="ml-0.5 text-[11px] font-bold text-accent" aria-label="未保存">●</span>}
+              {tab.dirty && <span className="ml-0.5 text-[11px] font-bold text-accent" aria-label="有未保存修改" title="有未保存修改">●</span>}
               {!tab.dirty && tab.saveState === "saved" && <Check size={10} className="text-success" />}
             </button>
             <button type="button" aria-label={`关闭 ${tab.displayName}`} title="关闭编辑标签" className="mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => openOrClose(tab)}><X size={10} /></button>
@@ -509,11 +525,12 @@ export function RemoteEditorWorkspace({
           {children}
         </div>
         {activeView === "editor" && activeDocument && <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
-          <div className="flex h-8 shrink-0 items-center justify-between border-b border-border bg-panel-header px-2">
+          <div className="flex h-8 shrink-0 items-center justify-between bg-panel-header px-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${connected && activeDocument.sessionId === sessionId ? "bg-success" : "bg-warning"}`} />
-              <span className="truncate text-[10px] font-medium" title={`${connectionName} / ${activeDocument.canonicalPath}`}>{activeDocument.canonicalPath}</span>
-              {activeDocument.sensitive && <span className="shrink-0 rounded-sm border border-warning/40 px-1 py-0.5 text-[9px] text-warning">敏感路径</span>}
+              <span className="max-w-36 shrink-0 truncate rounded-sm bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium" title={connectionName}>{connectionName}</span>
+              <span className="truncate font-mono text-[11px]" title={`${connectionName} / ${activeDocument.canonicalPath}`}>{activeDocument.canonicalPath}</span>
+              {activeDocument.sensitive && <span className="shrink-0 rounded-sm border border-warning/40 px-1 py-0.5 text-[10px] text-warning">敏感路径</span>}
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
               <EditorButton label="保存（⌘S / Ctrl+S）" icon={busy ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} disabled={!canSave || busy} onClick={() => startSave(activeDocument)} />
@@ -533,7 +550,7 @@ export function RemoteEditorWorkspace({
             </div>
           </div>
 
-          {activeDocument.readOnlyReason && <div className="flex min-h-7 items-center gap-1.5 border-b border-warning/20 bg-warning/5 px-3 py-1 text-[10px] text-warning" role="status">
+          {activeDocument.readOnlyReason && <div className="flex min-h-7 items-center gap-1.5 bg-warning/5 px-3 py-1 text-[11px] text-warning" role="status">
             <AlertCircle size={11} className="shrink-0" />
             <span className="min-w-0 flex-1">{activeDocument.readOnlyReason}</span>
             {activeDocument.readOnlyReason.includes("2 MiB") && <Button type="button" variant="outline" size="xs" className="h-5 shrink-0 rounded-sm px-1.5 text-[9px]" onClick={() => void restoreLargeFile(activeDocument)}>继续编辑</Button>}
@@ -545,7 +562,7 @@ export function RemoteEditorWorkspace({
             </div>}
           </div>
 
-          <footer className="flex h-6 shrink-0 items-center justify-between border-t border-border bg-panel-header px-2 text-[9px] text-muted-foreground">
+          <footer className="flex h-7 shrink-0 items-center justify-between bg-panel-header px-2 text-[10px] text-muted-foreground">
             <div className="flex min-w-0 items-center gap-2">
               <select aria-label="编辑器语言模式" className="h-4 max-w-40 border-0 bg-transparent text-[9px] text-muted-foreground outline-none" value={activeDocument.languageId} onChange={(event) => {
                 const languageId = event.target.value;
@@ -557,11 +574,16 @@ export function RemoteEditorWorkspace({
               </select>
               <span>{activeDocument.encoding}</span><span>{activeDocument.lineEnding.toUpperCase()}</span>
               <span>{formatBytes(activeDocument.sizeBytes)}</span>
-              <span>{activeDocument.readOnly || activeDocument.sessionId !== sessionId || !connected ? "只读" : activeDocument.dirty ? "未保存" : "已同步"}</span>
+              {activeDocument.readOnly && <span>只读预览</span>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <span>行 {cursor.line}，列 {cursor.column}</span>
-              <span>{activeDocument.saveState === "saving" ? "正在保存…" : activeDocument.saveState === "conflict" ? "存在冲突" : activeDocument.saveState === "offline" ? "SSH 已断开，草稿保留" : activeDocument.saveState === "error" ? "保存失败，草稿保留" : connected ? "SSH 在线" : "SSH 离线"}</span>
+              <span className="inline-flex items-center gap-1" role="status">
+                {activeDocument.dirty || activeDocument.saveState === "error" || activeDocument.saveState === "conflict"
+                  ? <AlertCircle size={10} className="text-warning" />
+                  : activeDocument.saveState === "saved" ? <Check size={10} className="text-success" /> : null}
+                {saveStatus}
+              </span>
             </div>
           </footer>
           {activeDocument.error && activeDocument.saveState === "error" && <div className="border-t border-destructive/30 bg-destructive/5 px-2 py-1 text-[10px] text-destructive" role="alert">{activeDocument.error}</div>}

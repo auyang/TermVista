@@ -334,6 +334,13 @@ pub trait SshSessionTransport: Send + Sync {
     async fn write(&self, bytes: Vec<u8>) -> Result<(), SshError>;
     async fn resize(&self, size: TerminalSize) -> Result<(), SshError>;
     async fn open_sftp_stream(&self) -> Result<russh::ChannelStream<russh::client::Msg>, SshError>;
+    async fn open_direct_tcpip(
+        &self,
+        target_host: &str,
+        target_port: u32,
+        originator_host: &str,
+        originator_port: u32,
+    ) -> Result<russh::ChannelStream<russh::client::Msg>, SshError>;
     async fn exec_read_only(
         &self,
         command: ReadOnlySessionCommand,

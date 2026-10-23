@@ -4,6 +4,8 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::tunnels::ForwardRule;
+
 #[derive(Clone, Copy)]
 pub enum AuditAction {
     SshConnection,
@@ -153,9 +155,9 @@ impl ConnectionProfilesStore {
         let version: i32 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .map_err(database_error)?;
-        if version > 3 {
+        if version > 4 {
             return Err(format!(
-                "连接数据库版本 {version} 高于当前应用支持的版本 3；为保护用户数据，已停止启动。"
+                "连接数据库版本 {version} 高于当前应用支持的版本 4；为保护用户数据，已停止启动。"
             ));
         }
         let phase4b_identity_pending = !migration_applied(&connection, "phase4b_identity_v1")?;
@@ -163,12 +165,14 @@ impl ConnectionProfilesStore {
             !migration_applied(&connection, "phase4b_vault_envelope_v2")?;
         let phase4b_nonce_ledger_pending =
             !migration_applied(&connection, "phase4b_nonce_ledger_v3")?;
+        let phase4b_tunnels_pending = !migration_applied(&connection, "phase4b_tunnels_v1")?;
         if has_existing_data && version < 3 {
             backup_database_before_phase4a_migration(&connection, path)?;
         } else if has_existing_data
             && (phase4b_identity_pending
                 || phase4b_envelope_pending
-                || phase4b_nonce_ledger_pending)
+                || phase4b_nonce_ledger_pending
+                || phase4b_tunnels_pending)
         {
             backup_database_before_phase4b_migration(&connection, path)?;
         }
@@ -233,6 +237,10 @@ impl ConnectionProfilesStore {
         migrate_phase4b_identity(&mut connection)?;
         migrate_phase4b_vault_envelope(&mut connection)?;
         migrate_phase4b_nonce_ledger(&mut connection)?;
+        migrate_phase4b_tunnels(&mut connection)?;
+        connection
+            .pragma_update(None, "user_version", 4)
+            .map_err(database_error)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -1147,6 +1155,98 @@ impl ConnectionProfilesStore {
             .map_err(database_error)
     }
 
+    pub fn forward_rules_list(&self, profile_id: Option<&str>) -> Result<Vec<ForwardRule>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?;
+        let mut statement = connection
+            .prepare(
+                "SELECT id, profile_id, display_name, bind_host, bind_port, target_host,
+                        target_port, created_at, updated_at
+                 FROM ssh_port_forward_rules
+                 WHERE (?1 IS NULL OR profile_id = ?1)
+                 ORDER BY profile_id, display_name COLLATE NOCASE, created_at, id",
+            )
+            .map_err(database_error)?;
+        let rows = statement
+            .query_map([profile_id], |row| {
+                Ok(ForwardRule {
+                    id: row.get(0)?,
+                    profile_id: row.get(1)?,
+                    name: row.get(2)?,
+                    local_host: row.get(3)?,
+                    local_port: u32::try_from(row.get::<_, i64>(4)?).unwrap_or(0),
+                    target_host: row.get(5)?,
+                    target_port: u32::try_from(row.get::<_, i64>(6)?).unwrap_or(0),
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                })
+            })
+            .map_err(database_error)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(database_error)
+    }
+
+    pub fn forward_rule_save(&self, rule: &ForwardRule) -> Result<(), String> {
+        let mut rule = rule.clone();
+        rule.validate_and_normalize()
+            .map_err(|error| error.message)?;
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?;
+        let transaction = connection.transaction().map_err(database_error)?;
+        let created_at: Option<i64> = transaction
+            .query_row(
+                "SELECT created_at FROM ssh_port_forward_rules WHERE id = ?1",
+                [&rule.id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(database_error)?;
+        let created_at = created_at.unwrap_or(rule.created_at);
+        transaction
+            .execute(
+                "INSERT INTO ssh_port_forward_rules(
+                    id, profile_id, display_name, bind_host, bind_port, target_host,
+                    target_port, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(id) DO UPDATE SET
+                    profile_id = excluded.profile_id,
+                    display_name = excluded.display_name,
+                    bind_host = excluded.bind_host,
+                    bind_port = excluded.bind_port,
+                    target_host = excluded.target_host,
+                    target_port = excluded.target_port,
+                    updated_at = excluded.updated_at",
+                params![
+                    rule.id,
+                    rule.profile_id,
+                    rule.name,
+                    rule.local_host,
+                    i64::from(rule.local_port),
+                    rule.target_host,
+                    i64::from(rule.target_port),
+                    created_at,
+                    rule.updated_at,
+                ],
+            )
+            .map_err(database_error)?;
+        transaction.commit().map_err(database_error)
+    }
+
+    pub fn forward_rule_delete(&self, rule_id: &str) -> Result<bool, String> {
+        self.connection
+            .lock()
+            .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?
+            .execute(
+                "DELETE FROM ssh_port_forward_rules WHERE id = ?1",
+                [rule_id],
+            )
+            .map(|changed| changed > 0)
+            .map_err(database_error)
+    }
+
     pub fn mark_connected(&self, profile_id: &str) -> Result<(), String> {
         let connection = self
             .connection
@@ -1579,6 +1679,34 @@ fn migrate_phase4b_nonce_ledger(connection: &mut Connection) -> Result<(), Strin
     transaction.commit().map_err(database_error)
 }
 
+fn migrate_phase4b_tunnels(connection: &mut Connection) -> Result<(), String> {
+    if migration_applied(connection, "phase4b_tunnels_v1")? {
+        return Ok(());
+    }
+    let transaction = connection.transaction().map_err(database_error)?;
+    transaction
+        .execute_batch(
+            "CREATE TABLE IF NOT EXISTS ssh_port_forward_rules (
+                id TEXT PRIMARY KEY NOT NULL,
+                profile_id TEXT NOT NULL REFERENCES connection_profiles(id) ON DELETE CASCADE,
+                display_name TEXT NOT NULL CHECK (length(trim(display_name)) BETWEEN 1 AND 64),
+                bind_host TEXT NOT NULL CHECK (bind_host = '127.0.0.1'),
+                bind_port INTEGER NOT NULL CHECK (bind_port BETWEEN 1 AND 65535),
+                target_host TEXT NOT NULL CHECK (length(trim(target_host)) BETWEEN 1 AND 255),
+                target_port INTEGER NOT NULL CHECK (target_port BETWEEN 1 AND 65535),
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                UNIQUE(profile_id, bind_host, bind_port)
+             );
+             CREATE INDEX IF NOT EXISTS idx_ssh_port_forward_rules_profile
+                ON ssh_port_forward_rules(profile_id, display_name COLLATE NOCASE, created_at);
+             INSERT INTO app_migrations(name, applied_at)
+                VALUES ('phase4b_tunnels_v1', CAST(strftime('%s','now') AS INTEGER) * 1000);",
+        )
+        .map_err(database_error)?;
+    transaction.commit().map_err(database_error)
+}
+
 fn reserve_rotation_nonce(
     transaction: &Transaction<'_>,
     key_id: &str,
@@ -1874,6 +2002,118 @@ mod tests {
 
     fn memory_store() -> ConnectionProfilesStore {
         ConnectionProfilesStore::from_connection(Connection::open_in_memory().unwrap()).unwrap()
+    }
+
+    fn forward_rule(id: &str, profile_id: &str, port: u32) -> ForwardRule {
+        ForwardRule {
+            id: id.to_owned(),
+            profile_id: profile_id.to_owned(),
+            name: format!("规则 {id}"),
+            local_host: "127.0.0.1".to_owned(),
+            local_port: port,
+            target_host: "db.example.invalid".to_owned(),
+            target_port: 3306,
+            created_at: 100,
+            updated_at: 100,
+        }
+    }
+
+    #[test]
+    fn tunnel_rules_are_profile_scoped_unique_and_cascade_with_profile_deletion() {
+        let store = memory_store();
+        store.save(&profile("host-one")).unwrap();
+        store.save(&profile("host-two")).unwrap();
+
+        let rule = forward_rule("rule-one", "host-one", 13_306);
+        store.forward_rule_save(&rule).unwrap();
+        assert_eq!(
+            store
+                .forward_rules_list(Some("host-one"))
+                .unwrap()
+                .as_slice(),
+            std::slice::from_ref(&rule)
+        );
+        assert_eq!(store.forward_rules_list(Some("host-two")).unwrap(), []);
+
+        assert!(
+            store
+                .forward_rule_save(&forward_rule("rule-duplicate", "host-one", 13_306))
+                .is_err()
+        );
+        store
+            .forward_rule_save(&forward_rule("rule-two", "host-two", 13_306))
+            .unwrap();
+
+        assert!(store.delete("host-one").unwrap());
+        assert_eq!(store.forward_rules_list(Some("host-one")).unwrap(), []);
+        assert_eq!(store.forward_rules_list(Some("host-two")).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn tunnel_migration_preserves_profiles_and_is_durable_across_reopen() {
+        let directory = std::env::temp_dir().join(format!("termvista-tunnels-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let database_path = directory.join("connections.sqlite3");
+        {
+            let store = ConnectionProfilesStore::open(&database_path).unwrap();
+            store.save(&profile("legacy-host")).unwrap();
+            store
+                .ssh_key_save(&SshKeyMetadata {
+                    id: "legacy-key".to_owned(),
+                    alias: "保留密钥".to_owned(),
+                    key_type: "ssh-ed25519".to_owned(),
+                    fingerprint: "SHA256:legacy-test".to_owned(),
+                    public_key: "ssh-ed25519 AAAA".to_owned(),
+                    storage_kind: "path".to_owned(),
+                    secret_ref: None,
+                    path_ref: Some("/tmp/legacy-key".to_owned()),
+                    created_at: 1,
+                    references: 0,
+                })
+                .unwrap();
+            store
+                .forward_rule_save(&forward_rule("durable-rule", "legacy-host", 15432))
+                .unwrap();
+            drop(store);
+        }
+
+        {
+            let connection = Connection::open(&database_path).unwrap();
+            connection
+                .execute_batch(
+                    "DROP TABLE ssh_port_forward_rules;
+                     DELETE FROM app_migrations WHERE name = 'phase4b_tunnels_v1';
+                     PRAGMA user_version = 3;",
+                )
+                .unwrap();
+        }
+
+        let migrated = ConnectionProfilesStore::open(&database_path).unwrap();
+        assert_eq!(migrated.list().unwrap()[0].id, "legacy-host");
+        assert_eq!(migrated.ssh_key_list().unwrap()[0].id, "legacy-key");
+        assert_eq!(migrated.forward_rules_list(None).unwrap(), []);
+        migrated
+            .forward_rule_save(&forward_rule("durable-rule", "legacy-host", 15432))
+            .unwrap();
+        drop(migrated);
+
+        let reopened = ConnectionProfilesStore::open(&database_path).unwrap();
+        assert_eq!(reopened.list().unwrap()[0].id, "legacy-host");
+        assert_eq!(reopened.ssh_key_list().unwrap()[0].id, "legacy-key");
+        assert_eq!(
+            reopened.forward_rules_list(None).unwrap(),
+            [forward_rule("durable-rule", "legacy-host", 15432)]
+        );
+        assert_eq!(
+            std::fs::read_dir(&directory)
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_name().to_string_lossy().ends_with(".bak"))
+                .count(),
+            1
+        );
+        drop(reopened);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

@@ -514,6 +514,32 @@ impl SessionManager {
         session.open_sftp_stream().await
     }
 
+    pub async fn open_direct_tcpip(
+        &self,
+        session_id: &str,
+        target_host: &str,
+        target_port: u32,
+        originator_host: &str,
+        originator_port: u32,
+    ) -> Result<russh::ChannelStream<russh::client::Msg>, SshError> {
+        let session = {
+            let sessions = self.inner.sessions.lock().await;
+            let record = sessions.get(session_id).ok_or_else(session_not_found)?;
+            if record.summary.state != SshState::Connected
+                || record.transport.host_key_identity().is_none()
+            {
+                return Err(SshError::new(
+                    SshErrorCode::SessionClosed,
+                    "当前 SSH 会话未连接或缺少已验证的主机身份。",
+                ));
+            }
+            Arc::clone(&record.transport)
+        };
+        session
+            .open_direct_tcpip(target_host, target_port, originator_host, originator_port)
+            .await
+    }
+
     pub async fn exec_read_only(
         &self,
         session_id: &str,

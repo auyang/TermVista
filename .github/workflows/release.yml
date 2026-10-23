@@ -44,10 +44,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: 下载全部平台安装包
+      - name: 下载 Windows 与 macOS 安装包
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: TermVista-*
+          pattern: TermVista-macOS-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: 下载 Windows 安装包
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: TermVista-Windows-*
           path: release-assets
           merge-multiple: true
 

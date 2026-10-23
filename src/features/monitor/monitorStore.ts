@@ -60,13 +60,19 @@ function withSnapshot(
       : network?.selectedInterface ?? network?.interfaces[0]?.name;
   const chosen = network?.interfaces.find((item) => item.name === selectedInterface);
   let networkHistory = context.networkHistory;
-  if (chosen && selectedInterface && chosen.rxBytesPerSec !== null && chosen.txBytesPerSec !== null) {
+  if (selectedInterface && snapshot.network.state !== "pending") {
     const history = networkHistory[selectedInterface] ?? [];
+    const safeRate = (value: number | null | undefined) =>
+      value !== null && value !== undefined && Number.isFinite(value) && value >= 0 ? value : null;
     networkHistory = {
       ...networkHistory,
       [selectedInterface]: [
         ...history,
-        { sampledAt: snapshot.collectedAt, rx: chosen.rxBytesPerSec, tx: chosen.txBytesPerSec },
+        {
+          sampledAt: snapshot.collectedAt,
+          rx: chosen ? safeRate(chosen.rxBytesPerSec) : null,
+          tx: chosen ? safeRate(chosen.txBytesPerSec) : null,
+        },
       ].slice(-36),
     };
   }

@@ -10,7 +10,7 @@
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
-    "test:polish": "node --experimental-strip-types --test tests/terminal-paste.test.mjs tests/terminal-security.test.mjs tests/reconnect-policy.test.mjs tests/profile-tab-reuse.test.mjs tests/quick-connect.test.mjs tests/connection-tree-order.test.mjs tests/editor-languages.test.mjs",
+    "test:polish": "node --experimental-strip-types --test tests/terminal-paste.test.mjs tests/terminal-security.test.mjs tests/reconnect-policy.test.mjs tests/profile-tab-reuse.test.mjs tests/quick-connect.test.mjs tests/connection-tree-order.test.mjs tests/editor-languages.test.mjs tests/monitor-network-chart.test.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -34,6 +34,7 @@
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "echarts": "6.1.0",
     "lucide-react": "^1.61.0",
     "monaco-editor": "0.57.0",
     "react": "^19.1.0",

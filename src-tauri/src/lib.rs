@@ -39,9 +39,10 @@ use ssh::{
     TerminalSize,
 };
 use tauri::{
-    Manager, State, WindowEvent,
+    Emitter, Manager, State, WindowEvent,
     ipc::{Channel, InvokeResponseBody},
 };
+use tunnels::{ForwardRule, ForwardRuntime, TunnelManager};
 
 pub mod ai;
 pub mod connections;
@@ -53,6 +54,7 @@ pub mod security;
 pub mod settings;
 pub mod sftp;
 pub mod ssh;
+pub mod tunnels;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -108,11 +110,110 @@ fn connection_profile_save(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-fn connection_profile_delete(
+async fn connection_profile_delete(
     profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
     profile_id: String,
 ) -> Result<bool, String> {
+    tunnels.stop_profile(&profile_id).await;
     profiles.delete(&profile_id)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn tunnel_rules_list(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    profile_id: Option<String>,
+) -> Result<Vec<ForwardRule>, String> {
+    profiles.forward_rules_list(profile_id.as_deref())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn tunnel_rule_save(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
+    mut rule: ForwardRule,
+) -> Result<ForwardRule, String> {
+    tunnels
+        .ensure_stopped(&rule.id)
+        .await
+        .map_err(|error| error.message)?;
+    rule.validate_and_normalize()
+        .map_err(|error| error.message)?;
+    rule.updated_at = tunnels::models::now_millis();
+    profiles.forward_rule_save(&rule).map_err(|error| {
+        if error.contains("UNIQUE constraint failed") {
+            "此服务器已经有规则使用了该本地端口。".to_owned()
+        } else if error.contains("FOREIGN KEY constraint failed") {
+            "绑定的服务器配置已不存在，请重新选择服务器。".to_owned()
+        } else {
+            error
+        }
+    })?;
+    Ok(rule)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn tunnel_rule_delete(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
+    rule_id: String,
+) -> Result<bool, String> {
+    tunnels
+        .ensure_stopped(&rule_id)
+        .await
+        .map_err(|error| error.message)?;
+    let deleted = profiles.forward_rule_delete(&rule_id)?;
+    if deleted {
+        tunnels
+            .forget_rule(&rule_id)
+            .await
+            .map_err(|error| error.message)?;
+    }
+    Ok(deleted)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn tunnel_start(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
+    sessions: State<'_, Arc<SessionManager>>,
+    rule_id: String,
+    session_id: String,
+) -> Result<ForwardRuntime, tunnels::models::TunnelError> {
+    let rule = profiles
+        .forward_rules_list(None)
+        .map_err(|_| {
+            tunnels::models::TunnelError::new(
+                tunnels::models::TunnelErrorCode::Internal,
+                "无法读取端口转发规则。",
+            )
+        })?
+        .into_iter()
+        .find(|rule| rule.id == rule_id)
+        .ok_or_else(|| {
+            tunnels::models::TunnelError::new(
+                tunnels::models::TunnelErrorCode::InvalidRule,
+                "找不到端口转发规则。",
+            )
+        })?;
+    tunnels
+        .start(&rule, &session_id, sessions.inner().clone())
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn tunnel_stop(
+    tunnels: State<'_, Arc<TunnelManager>>,
+    rule_id: String,
+) -> Result<ForwardRuntime, tunnels::models::TunnelError> {
+    tunnels.stop(&rule_id).await
+}
+
+#[tauri::command]
+async fn tunnel_status_list(
+    tunnels: State<'_, Arc<TunnelManager>>,
+) -> Result<Vec<ForwardRuntime>, String> {
+    Ok(tunnels.runtime_list().await)
 }
 
 #[tauri::command]
@@ -999,8 +1100,10 @@ async fn ssh_resize(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+#[allow(clippy::too_many_arguments)]
 async fn ssh_disconnect(
     state: State<'_, Arc<SessionManager>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
     editor: State<'_, Arc<RemoteEditorService>>,
     sftp: State<'_, Arc<SftpManager>>,
     monitor: State<'_, Arc<MonitorManager>>,
@@ -1008,6 +1111,7 @@ async fn ssh_disconnect(
     diagnostics: State<'_, Arc<DiagnosticRuntime>>,
     session_id: String,
 ) -> Result<(), SshError> {
+    tunnels.stop_session(&session_id).await;
     ai.close_session(&session_id).await;
     diagnostics.close_session(&session_id).await;
     monitor.stop_session(&session_id).await;
@@ -1063,12 +1167,14 @@ async fn ssh_sessions(
 #[tauri::command]
 async fn ssh_close_all(
     state: State<'_, Arc<SessionManager>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
     editor: State<'_, Arc<RemoteEditorService>>,
     sftp: State<'_, Arc<SftpManager>>,
     monitor: State<'_, Arc<MonitorManager>>,
     ai: State<'_, Arc<AiRuntime>>,
     diagnostics: State<'_, Arc<DiagnosticRuntime>>,
 ) -> Result<(), SshError> {
+    tunnels.shutdown_all().await;
     ai.close_all().await;
     diagnostics.close_all().await;
     monitor.close_all().await;
@@ -1726,6 +1832,10 @@ pub fn run() {
                 Arc::new(RusshBackend),
                 Arc::clone(&host_keys),
             ));
+            let tunnel_app = app.handle().clone();
+            let tunnels = Arc::new(TunnelManager::new(move |runtime| {
+                let _ = tunnel_app.emit("tunnel-runtime", runtime);
+            }));
             let monitor = Arc::new(MonitorManager::new(Arc::clone(&sessions)));
             let sftp = Arc::new(SftpManager::new(Arc::clone(&sessions)));
             let editor = Arc::new(RemoteEditorService::new(
@@ -1750,6 +1860,7 @@ pub fn run() {
             let credential_vault = Arc::new(CredentialVault::new(Arc::clone(&connection_profiles)));
             let credentials: Arc<dyn CredentialStore> = credential_vault.clone();
             app.manage(Arc::clone(&sessions));
+            app.manage(Arc::clone(&tunnels));
             app.manage(connection_profiles);
             app.manage(host_keys);
             app.manage(credential_vault);
@@ -1764,12 +1875,14 @@ pub fn run() {
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::Destroyed) {
                 let sessions = window.state::<Arc<SessionManager>>().inner().clone();
+                let tunnels = window.state::<Arc<TunnelManager>>().inner().clone();
                 let sftp = window.state::<Arc<SftpManager>>().inner().clone();
                 let editor = window.state::<Arc<RemoteEditorService>>().inner().clone();
                 let monitor = window.state::<Arc<MonitorManager>>().inner().clone();
                 let ai = window.state::<Arc<AiRuntime>>().inner().clone();
                 let diagnostics = window.state::<Arc<DiagnosticRuntime>>().inner().clone();
                 tauri::async_runtime::spawn(async move {
+                    tunnels.shutdown_all().await;
                     editor.close_all().await;
                     ai.close_all().await;
                     diagnostics.close_all().await;
@@ -1785,6 +1898,12 @@ pub fn run() {
             connection_profiles_list,
             connection_profile_save,
             connection_profile_delete,
+            tunnel_rules_list,
+            tunnel_rule_save,
+            tunnel_rule_delete,
+            tunnel_start,
+            tunnel_stop,
+            tunnel_status_list,
             connection_profiles_clear_recent,
             connection_groups_list,
             connection_group_create,

@@ -765,6 +765,49 @@ impl SshSessionTransport for RusshSession {
         }
     }
 
+    async fn open_direct_tcpip(
+        &self,
+        target_host: &str,
+        target_port: u32,
+        originator_host: &str,
+        originator_port: u32,
+    ) -> Result<russh::ChannelStream<client::Msg>, SshError> {
+        let handle = self.handle.lock().await;
+        let handle = handle.as_ref().ok_or_else(|| {
+            SshError::new(
+                SshErrorCode::SessionClosed,
+                "SSH 会话已关闭，无法建立端口转发通道。",
+            )
+        })?;
+        let channel = match timeout(
+            CHANNEL_TIMEOUT,
+            handle.channel_open_direct_tcpip(
+                target_host,
+                target_port,
+                originator_host,
+                originator_port,
+            ),
+        )
+        .await
+        {
+            Err(_) => {
+                return Err(SshError::new(
+                    SshErrorCode::ConnectionTimeout,
+                    "打开 SSH 远端 TCP 通道超时。",
+                ));
+            }
+            Ok(Err(error)) => {
+                return Err(map_russh_error(
+                    error,
+                    SshErrorCode::ChannelOpenFailed,
+                    "SSH 服务端拒绝建立远端 TCP 通道",
+                ));
+            }
+            Ok(Ok(channel)) => channel,
+        };
+        Ok(channel.into_stream())
+    }
+
     async fn exec_read_only(
         &self,
         command: ReadOnlySessionCommand,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
-import { ChevronDown, ChevronRight, Clock3, Folder, FolderOpen, FolderPlus, KeyRound, Pencil, Plus, Search, Server, ShieldCheck, Star, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock3, Folder, FolderOpen, FolderPlus, GitFork, KeyRound, Pencil, Plus, Search, Server, ShieldCheck, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,7 @@ export function ConnectionManagerDialog() {
   const setOpen = useWorkspaceStore((state) => state.setManagerOpen);
   const view = useWorkspaceStore((state) => state.managerView);
   const setView = useWorkspaceStore((state) => state.setManagerView);
+  const openTunnelManager = useWorkspaceStore((state) => state.openTunnelManager);
   const profiles = useWorkspaceStore((state) => state.profiles);
   const addProfile = useWorkspaceStore((state) => state.addProfile);
   const updateProfile = useWorkspaceStore((state) => state.updateProfile);
@@ -469,6 +470,7 @@ export function ConnectionManagerDialog() {
     </div></ContextMenuTrigger>
     <ContextMenuContent>
       <ContextMenuItem onSelect={() => connect(profile)}><Server size={12} />连接</ContextMenuItem>
+      <ContextMenuItem onSelect={() => openTunnelManager(profile.id)}><GitFork size={12} />端口转发…</ContextMenuItem>
       <ContextMenuItem onSelect={() => editProfile(profile)}><Pencil size={12} />编辑</ContextMenuItem>
       <ContextMenuItem onSelect={() => void toggleFavoritePersisted(profile)}><Star size={12} />{profile.favorite ? "取消收藏" : "收藏"}</ContextMenuItem>
       <ContextMenuSeparator />
@@ -592,7 +594,7 @@ export function ConnectionManagerDialog() {
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(next) => { if (!next) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogTitle>删除服务器配置？</AlertDialogTitle>
-          <AlertDialogDescription>删除 {deleteTarget?.name} 的本机连接配置。已建立的 SSH 标签不会恢复为远端会话；共享主机指纹信任记录不会受影响。</AlertDialogDescription>
+          <AlertDialogDescription>删除 {deleteTarget?.name} 的本机连接配置和该服务器下保存的端口转发规则。运行中的转发会停止；共享主机指纹信任记录不会受影响。</AlertDialogDescription>
           <label className="flex items-start gap-2 text-[11px] leading-4 text-foreground"><input type="checkbox" checked={deleteCredentials} onChange={(event) => setDeleteCredentials(event.target.checked)} className="mt-0.5 accent-primary" /><span>同时清除关联的已保存密码和私钥口令</span></label>
           {!deleteCredentials && <p className="text-[10px] text-amber-700 dark:text-amber-300">已保存凭据会保留在本机加密保险库中，以后仍可手动清除。</p>}
           <div className="flex justify-end gap-2"><AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">取消</Button></AlertDialogCancel><Button type="button" variant="destructive" size="sm" className="h-7 rounded-sm px-2" onClick={() => void confirmDelete()}>删除配置</Button></div>

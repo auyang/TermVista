@@ -18,6 +18,7 @@ import { RemoteEditorWorkspace } from "@/features/editor/RemoteEditorWorkspace";
 import { resolveEditorLanguage } from "@/features/editor/languageRegistry";
 import { closeRemoteDocument, openRemoteDocument } from "@/features/editor/remoteEditorBridge";
 import { useEditorStore } from "@/features/editor/editorStore";
+import { TunnelManagerDialog } from "@/features/tunnels/TunnelManagerDialog";
 
 export function DesktopWorkspace() {
   const tabs = useWorkspaceStore((state) => state.tabs);
@@ -168,6 +169,7 @@ export function DesktopWorkspace() {
         </ResizablePanel>
       </ResizablePanelGroup>
       {aiOpen && narrow && <AiSidePanel sheet />}
+      <TunnelManagerDialog />
     </div>
   );
 }

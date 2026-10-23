@@ -63,6 +63,8 @@ type WorkspaceState = {
   managerOpen: boolean;
   managerView: "connections" | "trustedHosts";
   managerEditProfileId: string | null;
+  tunnelManagerOpen: boolean;
+  tunnelManagerProfileId: string | null;
   aiOpen: boolean;
   monitorCollapsed: boolean;
   sftpCollapsed: boolean;
@@ -93,6 +95,9 @@ type WorkspaceState = {
   setLastSftpPath: (id: string, path: string) => void;
   setManagerOpen: (open: boolean) => void;
   setManagerView: (view: "connections" | "trustedHosts") => void;
+  openTunnelManager: (profileId?: string | null) => void;
+  setTunnelManagerProfileId: (profileId: string) => void;
+  closeTunnelManager: () => void;
   requestManagerProfileEdit: (id: string) => void;
   clearManagerProfileEditRequest: () => void;
   setAiOpen: (open: boolean) => void;
@@ -121,6 +126,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       managerOpen: false,
       managerView: "connections",
       managerEditProfileId: null,
+      tunnelManagerOpen: false,
+      tunnelManagerProfileId: null,
       aiOpen: false,
       monitorCollapsed: false,
       sftpCollapsed: false,
@@ -223,6 +230,13 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       setLastSftpPath: (id, path) => set((state) => ({ lastSftpPaths: { ...state.lastSftpPaths, [id]: path } })),
       setManagerOpen: (managerOpen) => set({ managerOpen }),
       setManagerView: (managerView) => set({ managerView }),
+      openTunnelManager: (tunnelManagerProfileId = null) => set({
+        managerOpen: false,
+        tunnelManagerOpen: true,
+        tunnelManagerProfileId,
+      }),
+      setTunnelManagerProfileId: (tunnelManagerProfileId) => set({ tunnelManagerProfileId }),
+      closeTunnelManager: () => set({ tunnelManagerOpen: false, tunnelManagerProfileId: null }),
       requestManagerProfileEdit: (id) => set({ managerEditProfileId: id, managerOpen: true, managerView: "connections" }),
       clearManagerProfileEditRequest: () => set({ managerEditProfileId: null }),
       setAiOpen: (aiOpen) => set({ aiOpen }),

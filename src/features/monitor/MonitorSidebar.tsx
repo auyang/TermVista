@@ -5,6 +5,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { useDiagnosticStore } from "@/features/diagnostics/diagnosticStore";
 import type { Monitored, ProcessMetric } from "@/features/monitor/monitorTypes";
 import { useMonitorStore } from "@/features/monitor/monitorStore";
+import { NetworkTrendChart } from "@/features/monitor/NetworkTrendChart";
 import { useSshSessionStore } from "@/stores/sshSessionStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
@@ -16,6 +17,7 @@ export function MonitorSidebar({ collapsed, onToggle }: MonitorSidebarProps) {
   const sshSession = useSshSessionStore((state) => activeTab ? state.sessions[activeTab.id] ?? null : null);
   const sessionId = sshSession?.sessionId;
   const monitor = useMonitorStore((state) => sessionId ? state.sessions[sessionId] : undefined);
+  const theme = useWorkspaceStore((state) => state.theme);
   const snapshot = monitor?.snapshot;
   const [systemOpen, setSystemOpen] = useState(true);
   const [processSort, setProcessSort] = useState<ProcessSort>("memory");
@@ -145,8 +147,13 @@ export function MonitorSidebar({ collapsed, onToggle }: MonitorSidebarProps) {
             </div>
             {selectedNetwork ? <>
               <div className="mb-1 flex items-center justify-between text-[10px]"><span style={{ color: "var(--monitor-send)" }}>↑ {formatRate(selectedNetwork.txBytesPerSec)}</span><span style={{ color: "var(--monitor-receive)" }}>↓ {formatRate(selectedNetwork.rxBytesPerSec)}</span><span className="text-muted-foreground">{selectedInterface}</span></div>
-              <Sparkline values={networkHistory.map((item) => item.tx)} secondary={networkHistory.map((item) => item.rx)} ariaLabel={`${selectedInterface} 真实收发速率趋势`} />
-              {networkHistory.length < 2 && <div className="text-[9px] text-muted-foreground">等待下一次网卡计数采样。</div>}
+              <NetworkTrendChart
+                history={networkHistory}
+                theme={theme}
+                metricState={snapshot?.network.state}
+                reason={snapshot?.network.reason}
+                interfaceName={selectedInterface ?? "服务器网卡"}
+              />
             </> : <MetricPlaceholder metric={snapshot?.network} fallback={connected ? "等待服务器网卡采样…" : "连接后显示网卡吞吐趋势。"} />}
           </section></ContextMenuTrigger>
           <ContextMenuContent><ContextMenuItem disabled={!connected} onSelect={() => diagnoseMetric("network")}><Activity size={12} />诊断当前网络指标</ContextMenuItem></ContextMenuContent>

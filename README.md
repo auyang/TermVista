@@ -4,6 +4,14 @@
 
 [查看 0.0.2 发布说明](RELEASE_NOTES_0.0.2.md) · [浏览 GitHub Releases](https://github.com/auyang/TermVista/releases)
 
+## 界面截图
+
+以下为本机浏览器预览中的未连接首页，展示亮色与暗色主题；它们不是原生 Tauri 窗口截图。
+
+| 亮色主题 | 暗色主题 |
+| --- | --- |
+| ![TermVista 未连接首页（亮色）](docs/screenshots/home-light-1440x900.png) | ![TermVista 未连接首页（暗色）](docs/screenshots/home-dark-1440x900.png) |
+
 ## 功能
 
 - **SSH 终端**：支持密码和 SSH 私钥认证、多标签会话、终端重连，以及与当前 PTY 共用的命令输入栏。

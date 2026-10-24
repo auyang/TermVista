@@ -1,0 +1,23 @@
+{
+  "name": "termvista-website",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev": "pnpm css && astro dev --host 127.0.0.1",
+    "css": "tailwindcss -i ./src/styles/global.css -o ./src/styles/generated.css --minify",
+    "build": "pnpm css && astro build",
+    "preview": "astro preview --host 127.0.0.1",
+    "check": "pnpm css && astro check"
+  },
+  "dependencies": {
+    "astro": "^6.4.8",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@tailwindcss/cli": "4.3.3",
+    "typescript": "~6.0.3"
+  }
+}

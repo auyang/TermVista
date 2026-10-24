@@ -1,0 +1,11 @@
+---
+import LandingPage from '../../components/LandingPage.astro';
+import { supportedLocales, type Locale } from '../../data/copy';
+
+export function getStaticPaths() {
+  return supportedLocales.filter((locale) => locale !== 'en').map((locale) => ({ params: { locale }, props: { locale } }));
+}
+
+const { locale } = Astro.props as { locale: Locale };
+---
+<LandingPage locale={locale} />

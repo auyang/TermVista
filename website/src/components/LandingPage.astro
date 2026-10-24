@@ -1,0 +1,176 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { copy, localePaths, supportedLocales, type Locale } from '../data/copy';
+import { getLatestRelease } from '../data/github';
+
+interface Props { locale: Locale }
+const { locale } = Astro.props;
+const t = copy[locale];
+const release = await getLatestRelease();
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const pathFor = (target: Locale) => `${base}${localePaths[target]}`;
+const dateLabel = release ? new Intl.DateTimeFormat(t.htmlLang, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(release.publishedAt)) : '';
+const getPlatform = (name: string) => {
+  const assetName = name.toLowerCase();
+  if (assetName.includes('macos') && (assetName.includes('apple-silicon') || assetName.includes('apple_silicon') || assetName.includes('arm64'))) return 'apple';
+  if (assetName.includes('macos') && assetName.includes('intel')) return 'intel';
+  if (assetName.includes('windows') && (assetName.includes('x64') || assetName.includes('x86_64'))) return 'windows';
+  return 'other';
+};
+const downloads = release?.assets.map((asset) => ({ ...asset, platform: getPlatform(asset.name) })).filter((asset, index, all) => all.findIndex((candidate) => candidate.platform === asset.platform) === index) ?? [];
+const features = [
+  { ...t.features.items[0], mark: '⌘' },
+  { ...t.features.items[1], mark: '↔' },
+  { ...t.features.items[2], mark: '◌' },
+  { ...t.features.items[3], mark: '⇄' },
+];
+---
+
+<SiteLayout lang={t.htmlLang} title={`TermVista — ${t.hero.accent}`} description={t.hero.description} canonicalPath={localePaths[locale]} locales={localePaths}>
+  <div class="site-shell">
+    <header class="relative z-20 border-b soft-rule bg-white/85 backdrop-blur-xl">
+      <div class="container-wide flex h-[72px] items-center justify-between gap-5">
+        <a class="focus-ring flex shrink-0 items-center gap-3 rounded-sm" href={`${base}/`} aria-label={t.nav.home}>
+          <img src={`${base}/brand/termvista-icon.png`} alt="" width="34" height="34" class="size-[34px] rounded-[9px]" />
+          <span class="text-[17px] font-bold tracking-[-.035em] text-[#192f43]">TermVista</span>
+        </a>
+
+        <nav class="desktop-nav flex items-center gap-8 text-[13px] font-medium text-slate-600" aria-label={t.nav.primary}>
+          <a class="focus-ring rounded-sm transition hover:text-[#244f7d]" href="#product">{t.nav.product}</a>
+          <a class="focus-ring rounded-sm transition hover:text-[#244f7d]" href="#capabilities">{t.nav.capabilities}</a>
+          <a class="focus-ring rounded-sm transition hover:text-[#244f7d]" href="#downloads">{t.nav.downloads}</a>
+        </nav>
+
+        <div class="flex items-center gap-2.5">
+          <details class="language-menu relative">
+            <summary class="focus-ring flex cursor-pointer list-none items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-600 hover:border-slate-300">
+              <span aria-hidden="true">文</span><span class="hidden sm:inline">{t.localeName}</span><span aria-hidden="true" class="text-[10px]">⌄</span>
+            </summary>
+            <div class="language-popover absolute right-0 top-[calc(100%+8px)] z-30 min-w-40 gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10">
+              {supportedLocales.map((target) => <a class:list={["focus-ring rounded-lg px-3 py-2 text-[13px] hover:bg-slate-50", { "bg-slate-50 font-semibold text-[#244f7d]": target === locale }]} href={pathFor(target)}>{copy[target].localeName}</a>)}
+            </div>
+          </details>
+          <a class="focus-ring hidden rounded-full bg-[#203f60] px-4 py-2.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#16334f] sm:inline-flex" href="https://github.com/auyang/TermVista" target="_blank" rel="noreferrer">{t.nav.github}<span aria-hidden="true" class="ml-2">↗</span></a>
+          <details class="language-menu mobile-nav relative sm:hidden">
+            <summary class="focus-ring grid size-10 cursor-pointer list-none place-items-center rounded-full border border-slate-200 bg-white text-[#355d81]" aria-label={t.nav.menu}>
+              <span class="text-lg leading-none" aria-hidden="true">☰</span>
+            </summary>
+            <div class="language-popover absolute right-0 top-[calc(100%+8px)] z-30 min-w-48 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-900/10">
+              <a class="rounded-lg px-3 py-2 text-sm hover:bg-slate-50" href="#product">{t.nav.product}</a>
+              <a class="rounded-lg px-3 py-2 text-sm hover:bg-slate-50" href="#capabilities">{t.nav.capabilities}</a>
+              <a class="rounded-lg px-3 py-2 text-sm hover:bg-slate-50" href="#downloads">{t.nav.downloads}</a>
+              <a class="rounded-lg px-3 py-2 text-sm hover:bg-slate-50" href="https://github.com/auyang/TermVista" target="_blank" rel="noreferrer">{t.nav.github} ↗</a>
+            </div>
+          </details>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="product" class="hero-wash relative border-b soft-rule">
+        <div class="grid-paper pointer-events-none absolute inset-0 opacity-50 [mask-image:linear-gradient(to_bottom,black,transparent_82%)]"></div>
+        <div class="container-wide relative grid min-h-[650px] items-center gap-14 pb-20 pt-16 lg:grid-cols-[.86fr_1.14fr] lg:gap-10 lg:pb-24 lg:pt-20">
+          <div class="max-w-[530px]">
+            <div class="eyebrow mb-6 flex items-center gap-2"><span class="size-1.5 rounded-full bg-[#4e8bb8]"></span>{t.hero.eyebrow}</div>
+            <h1 class="hero-title text-[64px] font-semibold leading-[1.02] tracking-[-.065em] text-[#142b40]">{t.hero.title}<span class="mt-1 block text-[#4779a7]">{t.hero.accent}</span></h1>
+            <p class="mt-7 max-w-[490px] text-[16px] leading-7 text-slate-600">{t.hero.description}</p>
+            <div class="mt-8 flex flex-wrap gap-3">
+              <a class="focus-ring inline-flex min-h-12 items-center justify-center gap-3 rounded-lg bg-[#315f8e] px-5 text-[13px] font-semibold text-white shadow-[0_6px_14px_rgba(49,95,142,.18)] transition hover:bg-[#264e77]" href={release?.url ?? 'https://github.com/auyang/TermVista/releases'}>{t.hero.download}<span aria-hidden="true">↗</span></a>
+              <a class="focus-ring inline-flex min-h-12 items-center justify-center gap-3 rounded-lg border border-[#d0dce6] bg-white/75 px-5 text-[13px] font-semibold text-[#2b4966] transition hover:bg-white" href="https://github.com/auyang/TermVista" target="_blank" rel="noreferrer">{t.hero.source}<span aria-hidden="true">⌘</span></a>
+            </div>
+            <div class="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] text-slate-500">
+              <span class="release-pill inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 font-semibold text-[#315d85]"><span class="size-1.5 rounded-full bg-emerald-500"></span>{release ? `${t.hero.releaseLabel} · ${release.tag}` : t.hero.noRelease}</span>
+              <span>macOS · Windows</span><span class="text-slate-300">/</span><span>{t.hero.openSource}</span>
+            </div>
+          </div>
+
+          <div class="relative mx-auto w-full max-w-[690px] lg:ml-auto">
+            <div class="absolute -right-4 -top-8 hidden h-28 w-28 rounded-full border border-[#acc3d7]/60 lg:block"></div>
+            <div class="screenshot-frame relative overflow-hidden rounded-[18px] border border-white/90 bg-white p-2.5">
+              <div class="flex h-9 items-center gap-2 px-2">
+                <span class="size-2.5 rounded-full bg-[#d5dfe8]"></span><span class="size-2.5 rounded-full bg-[#d5dfe8]"></span><span class="size-2.5 rounded-full bg-[#d5dfe8]"></span>
+                <div class="mx-auto flex -translate-x-7 items-center gap-2 text-[10px] font-medium text-slate-500"><img src={`${base}/brand/termvista-icon.png`} alt="" width="14" height="14" />{t.hero.windowTitle}</div>
+                <span class="rounded-full bg-[#edf4f8] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.09em] text-[#497398]">{t.hero.status}</span>
+              </div>
+              <img src={`${base}/screenshots/connected-workspace.jpg`} alt={t.hero.screenshotAlt} width="1440" height="900" fetchpriority="high" class="block aspect-[1.6] w-full rounded-[10px] object-cover object-top" />
+            </div>
+            <div class="absolute -bottom-8 -left-7 hidden rounded-xl border border-white bg-white/95 px-4 py-3 shadow-lg shadow-slate-800/10 sm:flex sm:items-center sm:gap-3">
+              <span class="grid size-9 place-items-center rounded-lg bg-[#edf4fa] text-[#376e9e]" aria-hidden="true">⌁</span>
+              <span><span class="block text-[11px] font-semibold text-[#1d3448]">SSH · SFTP · AI</span><span class="mt-0.5 block text-[10px] text-slate-500">{t.proof.footnote}</span></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="container-wide grid gap-10 py-20 md:grid-cols-[.65fr_1.35fr] md:gap-20 md:py-28">
+        <div>
+          <p class="eyebrow">{t.proof.eyebrow}</p>
+          <h2 class="mt-5 max-w-sm text-3xl font-semibold leading-tight tracking-[-.045em] text-[#19334a] md:text-[42px]">{t.proof.title}</h2>
+        </div>
+        <div class="max-w-[680px] self-end">
+          <p class="text-[17px] leading-8 text-slate-600">{t.proof.body}</p>
+          <p class="feature-line mt-7 text-[11px] font-semibold tracking-[.04em] text-slate-500">{t.proof.footnote}</p>
+        </div>
+      </section>
+
+      <section id="capabilities" class="border-y soft-rule bg-white py-20 md:py-24">
+        <div class="container-wide">
+          <div class="grid gap-8 md:grid-cols-[.8fr_1.2fr] md:items-end">
+            <div><p class="eyebrow">{t.features.eyebrow}</p><h2 class="mt-5 max-w-md text-3xl font-semibold leading-tight tracking-[-.045em] text-[#19334a] md:text-[42px]">{t.features.title}</h2></div>
+            <p class="max-w-[530px] text-[15px] leading-7 text-slate-600 md:justify-self-end">{t.features.body}</p>
+          </div>
+          <div class="mt-12 grid border-y soft-rule sm:grid-cols-2 lg:grid-cols-4">
+            {features.map((feature, index) => <article class:list={["min-h-[230px] px-1 py-7 sm:px-6", { "border-t soft-rule sm:border-t-0": index > 1, "sm:border-l soft-rule": index % 2 === 1, "lg:border-t-0": index < 2, "lg:border-l soft-rule": index > 0 }]}>
+              <div class="flex items-center justify-between"><span class="grid size-10 place-items-center rounded-xl bg-[#eff4f8] text-lg font-medium text-[#47759e]">{feature.mark}</span><span class="text-[10px] font-semibold tracking-[.13em] text-slate-400">{feature.number}</span></div>
+              <h3 class="mt-7 text-[17px] font-semibold tracking-[-.02em] text-[#1e354a]">{feature.title}</h3>
+              <p class="mt-3 text-[13px] leading-6 text-slate-600">{feature.description}</p>
+            </article>)}
+          </div>
+        </div>
+      </section>
+
+      <section class="relative overflow-hidden bg-[#182f45] py-20 text-white md:py-24">
+        <div class="pointer-events-none absolute inset-0 opacity-20" style="background-image:radial-gradient(circle at 78% 30%,#90b4d2 0,transparent 32%),linear-gradient(135deg,transparent 68%,rgba(255,255,255,.12) 68.1%,transparent 68.3%)"></div>
+        <div class="container-wide relative grid gap-12 md:grid-cols-[1fr_.7fr] md:items-center">
+          <div class="max-w-[650px]"><p class="eyebrow !text-[#a8c5df]">{t.workflow.eyebrow}</p><h2 class="mt-5 max-w-xl text-3xl font-semibold leading-tight tracking-[-.045em] md:text-[42px]">{t.workflow.title}</h2><p class="mt-5 max-w-[590px] text-[15px] leading-7 text-slate-300">{t.workflow.body}</p></div>
+          <div class="rounded-2xl border border-white/10 bg-white/[.055] p-6 backdrop-blur-sm">
+            <div class="flex items-center gap-3 border-b border-white/10 pb-5"><span class="grid size-10 place-items-center rounded-xl bg-[#9dbbd3]/15 text-[#bfd5e8]" aria-hidden="true">✳</span><div><p class="text-sm font-semibold">{t.workflow.label}</p><p class="mt-1 text-[11px] text-slate-400">TermVista</p></div><span class="ml-auto rounded-full border border-white/10 px-2.5 py-1 text-[9px] text-slate-300">{t.workflow.optional}</span></div>
+            <ul class="mt-4 grid gap-3 text-[13px] text-slate-200">{t.workflow.points.map((point) => <li class="flex items-center gap-3"><span class="grid size-5 place-items-center rounded-full bg-emerald-300/10 text-[11px] text-emerald-300">✓</span>{point}</li>)}</ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="downloads" class="container-wide py-20 md:py-24">
+        <div class="grid gap-10 md:grid-cols-[.7fr_1.3fr] md:items-start">
+          <div><p class="eyebrow">{t.releases.eyebrow}</p><h2 class="mt-5 text-3xl font-semibold tracking-[-.045em] text-[#19334a] md:text-[42px]">{t.releases.title}</h2><p class="mt-5 max-w-sm text-[14px] leading-7 text-slate-600">{t.releases.body}</p></div>
+          <div class="rounded-2xl border border-[#d8e2e9] bg-white p-5 shadow-[0_14px_35px_rgba(25,51,74,.05)] md:p-7">
+            {release ? <>
+              <div class="flex flex-wrap items-start justify-between gap-4 border-b soft-rule pb-5"><div><p class="text-[10px] font-bold uppercase tracking-[.14em] text-emerald-700">{t.releases.latest}</p><p class="mt-2 text-2xl font-semibold tracking-[-.04em] text-[#19334a]">{release.tag}</p></div><div class="text-right"><p class="text-[11px] uppercase tracking-[.1em] text-slate-400">{t.releases.published}</p><p class="mt-2 text-[13px] font-medium text-slate-600">{dateLabel}</p></div></div>
+              <div class="mt-2 divide-y divide-slate-100">
+                {downloads.length ? downloads.map((asset) => <a class="download-link focus-ring flex items-center justify-between gap-4 rounded-lg px-2 py-4 transition hover:bg-slate-50" href={asset.url} target="_blank" rel="noreferrer"><span><span class="block text-[13px] font-semibold text-[#253e54]">{t.releases.platform[asset.platform] ?? t.releases.platform.other}</span><span class="mt-1 block break-all text-[10px] text-slate-400">{asset.name}</span></span><span class="download-arrow shrink-0 text-lg text-[#4779a7]" aria-label={t.hero.download}>↗</span></a>) : <p class="py-5 text-[13px] text-slate-500">{t.releases.empty}</p>}
+              </div>
+              <a class="mt-3 inline-flex items-center gap-2 text-[12px] font-semibold text-[#376b9c] hover:text-[#234e78]" href={release.url} target="_blank" rel="noreferrer">{t.releases.notes}<span aria-hidden="true">↗</span></a>
+            </> : <div class="py-4"><p class="text-sm leading-6 text-slate-600">{t.releases.empty}</p><a class="mt-5 inline-flex rounded-lg bg-[#315f8e] px-4 py-3 text-[12px] font-semibold text-white hover:bg-[#264e77]" href="https://github.com/auyang/TermVista/releases" target="_blank" rel="noreferrer">{t.hero.noRelease} ↗</a></div>}
+          </div>
+        </div>
+      </section>
+
+      <section class="border-y soft-rule bg-[#f0f4f7] py-16 md:py-20">
+        <div class="container-wide grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
+          <div><p class="eyebrow">{t.close.eyebrow}</p><h2 class="mt-4 text-3xl font-semibold tracking-[-.045em] text-[#19334a] md:text-[38px]">{t.close.title}</h2><p class="mt-3 max-w-xl text-[14px] leading-7 text-slate-600">{t.close.body}</p></div>
+          <div class="flex flex-wrap gap-3">
+            <a class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#203f60] px-4 text-[12px] font-semibold text-white hover:bg-[#16334f]" href="https://github.com/auyang/TermVista" target="_blank" rel="noreferrer">{t.close.star}<span aria-hidden="true">↗</span></a>
+            <a class="focus-ring inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#cbd7e0] bg-white px-4 text-[12px] font-semibold text-[#2e4e6b] hover:bg-slate-50" href="https://github.com/auyang/TermVista/issues" target="_blank" rel="noreferrer">{t.close.issue}<span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="bg-white py-8">
+      <div class="container-wide flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-center gap-3"><img src={`${base}/brand/termvista-icon.png`} alt="" width="30" height="30" class="size-[30px] rounded-lg" /><div><p class="text-[13px] font-semibold text-[#1d3448]">TermVista</p><p class="mt-1 text-[11px] text-slate-500">{t.footer.made}</p></div></div>
+        <div class="flex flex-wrap gap-x-5 gap-y-2 text-[11px] text-slate-500"><a class="hover:text-[#315f8e]" href="https://github.com/auyang/TermVista" target="_blank" rel="noreferrer">{t.footer.repository}</a><a class="hover:text-[#315f8e]" href="https://github.com/auyang/TermVista/releases" target="_blank" rel="noreferrer">{t.footer.releases}</a><a class="hover:text-[#315f8e]" href="https://github.com/auyang/TermVista/issues" target="_blank" rel="noreferrer">{t.footer.issues}</a><span>{t.footer.license}</span></div>
+      </div>
+    </footer>
+  </div>
+</SiteLayout>

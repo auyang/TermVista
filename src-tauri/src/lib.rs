@@ -1848,6 +1848,55 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{AboutMetadata, MenuBuilder, SubmenuBuilder};
+
+                let handle = app.handle();
+                let about = AboutMetadata {
+                    name: Some("TermVista".to_owned()),
+                    version: Some(app.package_info().version.to_string()),
+                    ..Default::default()
+                };
+                let application_menu = SubmenuBuilder::new(handle, "TermVista")
+                    .about_with_text("About TermVista", Some(about))
+                    .separator()
+                    .services()
+                    .separator()
+                    .hide_with_text("Hide TermVista")
+                    .hide_others()
+                    .separator()
+                    .quit_with_text("Quit TermVista")
+                    .build()?;
+                let file_menu = SubmenuBuilder::new(handle, "File").close_window().build()?;
+                let edit_menu = SubmenuBuilder::new(handle, "Edit")
+                    .undo()
+                    .redo()
+                    .separator()
+                    .cut()
+                    .copy()
+                    .paste()
+                    .select_all()
+                    .build()?;
+                let view_menu = SubmenuBuilder::new(handle, "View").fullscreen().build()?;
+                let window_menu = SubmenuBuilder::new(handle, "Window")
+                    .minimize()
+                    .maximize()
+                    .separator()
+                    .close_window()
+                    .build()?;
+                let help_menu = SubmenuBuilder::new(handle, "Help").build()?;
+                let menu = MenuBuilder::new(handle)
+                    .item(&application_menu)
+                    .item(&file_menu)
+                    .item(&edit_menu)
+                    .item(&view_menu)
+                    .item(&window_menu)
+                    .item(&help_menu)
+                    .build()?;
+                app.set_menu(menu)?;
+            }
+
             let known_hosts_path = app.path().app_data_dir()?.join("known_hosts.json");
             let connection_profiles_path = app.path().app_data_dir()?.join("connections.sqlite3");
             let connection_profiles = Arc::new(

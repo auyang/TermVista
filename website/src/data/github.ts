@@ -1,3 +1,5 @@
+import { env } from 'node:process';
+
 export interface ReleaseAsset {
   name: string;
   url: string;
@@ -14,8 +16,14 @@ export interface LatestRelease {
 let latestRelease: Promise<LatestRelease | null> | undefined;
 
 export function getLatestRelease(): Promise<LatestRelease | null> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  if (env.GITHUB_TOKEN) headers.Authorization = `Bearer ${env.GITHUB_TOKEN}`;
+
   latestRelease ??= fetch('https://api.github.com/repos/auyang/TermVista/releases/latest', {
-    headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+    headers,
     signal: AbortSignal.timeout(8000),
   })
     .then(async (response) => {

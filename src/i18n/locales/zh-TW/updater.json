@@ -67,6 +67,10 @@
     "tunnelSave": "儲存連接埠轉送規則",
     "tunnelDelete": "刪除連接埠轉送規則",
     "tunnelStart": "啟動連接埠轉送",
-    "tunnelStop": "停止連接埠轉送"
+    "tunnelStop": "停止連接埠轉送",
+    "socks5Save": "儲存 SOCKS5 規則",
+    "socks5Delete": "刪除 SOCKS5 規則",
+    "socks5Start": "啟動 SOCKS5 代理",
+    "socks5Stop": "停止 SOCKS5 代理"
   }
 }

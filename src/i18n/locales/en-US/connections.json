@@ -80,6 +80,7 @@
     "canceled": "The connection was canceled.",
     "inputTooLarge": "The input exceeded the allowed size and was blocked.",
     "internal": "An internal SSH error occurred. Close and reopen the connection.",
+    "jumpHostUnavailable": "The configured jump host is unavailable. The target connection stopped without a direct fallback.",
     "unknown": "The connection could not be established. Check the host, port, and network."
   },
   "manager": {
@@ -125,9 +126,19 @@
     "clearSavedCredentials": "Also clear the saved password and private-key passphrase",
     "credentialsWillRemain": "Saved credentials will remain in the encrypted local vault and can be cleared later.",
     "deleteProfile": "Delete profile",
+    "proxyJump": {
+      "label": "Jump host (ProxyJump)",
+      "direct": "Direct connection",
+      "unavailable": "The configured jump host is unavailable. The target connection stopped without a direct fallback.",
+      "invalid": "The configured jump host profile is unavailable.",
+      "nestedUnsupported": "Only one ProxyJump hop is supported. The jump profile cannot use another jump host.",
+      "connecting": "The jump host is still connecting. Retry the target after its SSH session is ready.",
+      "connectFirst": "Connect and verify the jump host first, then retry the target connection.",
+      "importDependencyMissing": "ProxyJump host “{{alias}}” must be an importable SSH Config entry or an existing profile."
+    },
     "previewConfig": "Preview SSH Config",
     "previewConfigDescription": "Select static host entries to import as local connection profiles.",
-    "configSafetyNotice": "Parsed without changing the source file. ProxyCommand and Match exec are not run. ProxyJump is not configured. IdentityFile paths are saved without reading or copying key contents.",
+    "configSafetyNotice": "Parsed without changing the source file. ProxyCommand and Match exec are never run. A single static ProxyJump host alias is imported as a jump profile. IdentityFile paths are saved without reading or copying key contents.",
     "noStaticHosts": "No concrete static host entries can be imported. Wildcard Host and dynamic Match entries are shown as warnings only.",
     "privateKeyPath": "Private-key path",
     "duplicateProfileSkipped": "A profile with this name already exists and will be skipped.",

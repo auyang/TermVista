@@ -594,6 +594,8 @@ async fn connect(sessions: &SessionManager, port: u16) -> String {
                 auth: SshAuth::Password {
                     password: TEST_PASSWORD.to_owned(),
                 },
+                jump_profile_id: None,
+                jump_session_id: None,
                 initial_size: TerminalSize {
                     cols: 100,
                     rows: 30,

@@ -1,5 +1,6 @@
 export type AiProviderKind = "openAiCompatible" | "ollama";
-export type AiTaskMode = "ask" | "diagnose" | "plan";
+export type AiTaskMode = "ask" | "diagnose" | "plan" | "tunnelDiagnose" | "tunnelSuggest";
+export type AiTunnelProtocol = "localTcp" | "socks5";
 
 export type AiProviderView = {
   id: string;
@@ -39,7 +40,8 @@ export type AiContextSource =
   | { kind: "sftpSelectedText"; remotePath: string }
   | { kind: "editorSelection"; documentId: string; revision: number; text: string }
   | { kind: "editorBuffer"; documentId: string; revision: number; dirty: boolean; text: string }
-  | { kind: "diagnosticEvidenceRefs"; runId: string; evidenceIds: string[] };
+  | { kind: "diagnosticEvidenceRefs"; runId: string; evidenceIds: string[] }
+  | { kind: "tunnelRule"; ruleId: string; protocol: AiTunnelProtocol };
 
 export type AiPreviewRequest = {
   sessionId: string;

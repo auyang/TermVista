@@ -14,6 +14,45 @@ pub enum AiTaskMode {
     Ask,
     Diagnose,
     Plan,
+    TunnelDiagnose,
+    TunnelSuggest,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AiTunnelProtocol {
+    LocalTcp,
+    Socks5,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TunnelSuggestionAction {
+    Create,
+    UpdateSelected,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TunnelSuggestionProtocol {
+    LocalTcp,
+    Socks5,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TunnelSuggestionDraft {
+    pub summary: String,
+    pub action: TunnelSuggestionAction,
+    pub protocol: TunnelSuggestionProtocol,
+    pub name: String,
+    pub group_name: String,
+    pub local_host: String,
+    pub local_port: u32,
+    #[serde(default)]
+    pub target_host: Option<String>,
+    #[serde(default)]
+    pub target_port: Option<u32>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -114,6 +153,10 @@ pub enum ContextSourceRequest {
     DiagnosticEvidenceRefs {
         run_id: String,
         evidence_ids: Vec<String>,
+    },
+    TunnelRule {
+        rule_id: String,
+        protocol: AiTunnelProtocol,
     },
 }
 

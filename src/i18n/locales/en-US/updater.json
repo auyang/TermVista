@@ -67,6 +67,10 @@
     "tunnelSave": "Save port-forward rule",
     "tunnelDelete": "Delete port-forward rule",
     "tunnelStart": "Start port forwarding",
-    "tunnelStop": "Stop port forwarding"
+    "tunnelStop": "Stop port forwarding",
+    "socks5Save": "Save SOCKS5 rule",
+    "socks5Delete": "Delete SOCKS5 rule",
+    "socks5Start": "Start SOCKS5 proxy",
+    "socks5Stop": "Stop SOCKS5 proxy"
   }
 }

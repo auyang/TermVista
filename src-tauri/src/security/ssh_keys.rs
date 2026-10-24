@@ -345,6 +345,7 @@ mod tests {
             auth_method: "privateKey".to_owned(),
             private_key_path: String::new(),
             key_ref: Some(key.id.clone()),
+            jump_profile_id: None,
             environment: "test".to_owned(),
             favorite: false,
             last_connected_at: None,

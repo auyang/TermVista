@@ -89,6 +89,7 @@
     "sourceEditorBuffer": "Monaco 未儲存編輯緩衝",
     "sourceEditorSavedBuffer": "Monaco 編輯緩衝",
     "sourceDiagnostics": "診斷證據：{{count}} 項",
+    "sourceTunnelRule": "目前選取的 SSH 隧道規則與執行狀態",
     "openAiCompatible": "OpenAI 相容 API"
   },
   "prompts": {
@@ -129,8 +130,8 @@
     "authentication": "驗證方式",
     "localNoKey": "本機服務 · 無 API Key",
     "systemCredential": "API Key · 系統認證儲存庫",
-    "allowHttp": "允許明文 HTTP。HTTP 會暴露 API Key 與請求內容；僅用於你明確設定的服務網址。",
-    "allowRemoteOllamaHttp": "允許連線遠端 Ollama 的明文 HTTP。流量未加密，建議使用 HTTPS。",
+    "allowHttp": "允許 HTTP（未加密）",
+    "allowRemoteOllamaHttp": "允許遠端 Ollama 使用 HTTP",
     "deleteKey": "刪除已儲存的 API Key",
     "test": "測試連線",
     "testing": "測試中…",

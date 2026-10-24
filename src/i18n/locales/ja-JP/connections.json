@@ -80,6 +80,7 @@
     "canceled": "接続はキャンセルされました。",
     "inputTooLarge": "入力が許容サイズを超えたためブロックしました。",
     "internal": "SSH 内部エラーが発生しました。接続を閉じて開き直してください。",
+    "jumpHostUnavailable": "設定された踏み台ホストを利用できません。直接接続へ切り替えず、対象への接続を停止しました。",
     "unknown": "接続を確立できませんでした。ホスト、ポート、ネットワークを確認してください。"
   },
   "manager": {
@@ -125,9 +126,19 @@
     "clearSavedCredentials": "保存済みパスワードと秘密鍵のパスフレーズも削除する",
     "credentialsWillRemain": "保存済み資格情報は暗号化されたローカル保管庫に残ります。後で削除できます。",
     "deleteProfile": "プロファイルを削除",
+    "proxyJump": {
+      "label": "踏み台ホスト（ProxyJump）",
+      "direct": "直接接続",
+      "unavailable": "設定された踏み台ホストを利用できません。直接接続へ切り替えず、対象への接続を停止しました。",
+      "invalid": "設定された踏み台ホストの接続プロファイルが見つかりません。",
+      "nestedUnsupported": "ProxyJump は 1 段のみ対応します。踏み台プロファイルに別の踏み台を設定できません。",
+      "connecting": "踏み台ホストは接続中です。SSH セッションの準備後に対象へ接続してください。",
+      "connectFirst": "先に踏み台ホストへ接続して本人確認を完了し、対象への接続を再試行してください。",
+      "importDependencyMissing": "ProxyJump ホスト「{{alias}}」は、インポート可能な SSH Config 項目または既存プロファイルである必要があります。"
+    },
     "previewConfig": "SSH Config をプレビュー",
     "previewConfigDescription": "静的なホスト項目を選択し、ローカルプロファイルとしてインポートします。",
-    "configSafetyNotice": "読み取りのみで解析し、元ファイルは変更しません。ProxyCommand と Match exec は実行しません。ProxyJump は設定しません。IdentityFile はパスのみ保存し、鍵の内容は読み取り・コピーしません。",
+    "configSafetyNotice": "読み取りのみで解析し、元ファイルは変更しません。ProxyCommand と Match exec は実行しません。静的な単一 ProxyJump ホスト別名は踏み台プロファイルとして取り込みます。IdentityFile はパスのみ保存し、鍵の内容は読み取り・コピーしません。",
     "noStaticHosts": "インポートできる具体的な静的ホスト項目はありません。ワイルドカード Host と動的 Match は警告としてのみ表示されます。",
     "privateKeyPath": "秘密鍵のパス",
     "duplicateProfileSkipped": "同じ名前のプロファイルがあるため、インポート時にスキップされます。",

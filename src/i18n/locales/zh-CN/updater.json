@@ -67,6 +67,10 @@
     "tunnelSave": "保存端口转发规则",
     "tunnelDelete": "删除端口转发规则",
     "tunnelStart": "启动端口转发",
-    "tunnelStop": "停止端口转发"
+    "tunnelStop": "停止端口转发",
+    "socks5Save": "保存 SOCKS5 规则",
+    "socks5Delete": "删除 SOCKS5 规则",
+    "socks5Start": "启动 SOCKS5 代理",
+    "socks5Stop": "停止 SOCKS5 代理"
   }
 }

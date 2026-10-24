@@ -13,6 +13,7 @@ import { rememberManagerOpener } from "@/features/connections/managerFocus";
 import { cancelAutoReconnect, connectProfile, resizeSsh, sendSshBytes } from "@/features/ssh/sshBridge";
 import { registerTerminal } from "@/features/ssh/terminalRegistry";
 import { classifyTerminalPaste, resolveTerminalPaste, type TerminalPastePreview } from "@/features/terminal/pasteGuard";
+import { shouldBlinkTerminalCursor } from "@/features/terminal/terminalCursorPolicy";
 import { blockOsc52ClipboardWrites, safeExternalLinkTarget } from "@/features/terminal/securityHandlers";
 import { useDiagnosticStore } from "@/features/diagnostics/diagnosticStore";
 import { useSshSessionStore, statusLabel } from "@/stores/sshSessionStore";
@@ -100,9 +101,11 @@ function SshTerminalView({ attemptId, active }: { attemptId: string; active: boo
     const mount = mountRef.current;
     if (!mount) return;
     const currentSettings = useSettingsStore.getState().settings.terminal;
+    const currentSession = useSshSessionStore.getState().sessions[attemptId];
     const terminal = new Terminal({
-      cursorBlink: currentSettings.cursorBlink,
+      cursorBlink: shouldBlinkTerminalCursor(currentSession?.state, currentSession?.sessionId, currentSettings.cursorBlink),
       cursorStyle: currentSettings.cursorStyle,
+      cursorInactiveStyle: "none",
       convertEol: false,
       scrollback: currentSettings.scrollback,
       fontFamily: currentSettings.fontFamily,
@@ -246,7 +249,7 @@ function SshTerminalView({ attemptId, active }: { attemptId: string; active: boo
     terminal.options.fontSize = fontSize;
     terminal.options.lineHeight = terminalSettings.lineHeight;
     terminal.options.cursorStyle = terminalSettings.cursorStyle;
-    terminal.options.cursorBlink = terminalSettings.cursorBlink;
+    terminal.options.cursorBlink = shouldBlinkTerminalCursor(session?.state, session?.sessionId, terminalSettings.cursorBlink);
     terminal.options.scrollback = terminalSettings.scrollback;
     terminal.options.theme = resolvedTerminalTheme(terminalSettings.colorScheme, appTheme);
     if (layoutChanged && activeRef.current) {
@@ -257,22 +260,27 @@ function SshTerminalView({ attemptId, active }: { attemptId: string; active: boo
         // 容器不可见时，下一次激活会重新计算终端尺寸。
       }
     }
-  }, [terminalSettings, appTheme, attemptId]);
+  }, [terminalSettings, appTheme, attemptId, session?.state, session?.sessionId]);
 
   useEffect(() => {
-    if (!active) return;
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    const canType = shouldBlinkTerminalCursor(session?.state, session?.sessionId, true);
+    if (!active || !canType) {
+      terminal.blur();
+      return;
+    }
     const timer = window.setTimeout(() => {
       try {
         fitRef.current?.fit();
-        const terminal = terminalRef.current;
-        if (terminal) void resizeSsh(attemptId, terminal.cols, terminal.rows).catch(() => undefined);
-        terminal?.focus();
+        void resizeSsh(attemptId, terminal.cols, terminal.rows).catch(() => undefined);
+        terminal.focus();
       } catch {
         // 尺寸为零时等待 ResizeObserver 的下一次通知。
       }
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [active, attemptId, session?.state]);
+  }, [active, attemptId, session?.state, session?.sessionId]);
 
   const finishPendingPaste = (choice: "cancel" | "send") => {
     const current = useSshSessionStore.getState().sessions[attemptId];

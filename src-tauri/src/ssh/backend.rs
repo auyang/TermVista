@@ -183,6 +183,7 @@ impl SshEvents {
 pub struct SshConnectContext {
     pub request: SshConnectRequest,
     pub session_id: String,
+    pub initial_stream: Option<russh::ChannelStream<russh::client::Msg>>,
     pub events: SshEvents,
     pub host_keys: Arc<HostKeyStore>,
     pub attempt: Arc<AttemptControl>,
@@ -367,6 +368,21 @@ pub fn connection_timeout() -> Duration {
 }
 
 pub fn invalid_connect_request(request: &SshConnectRequest) -> Option<SshError> {
+    if request.jump_profile_id.is_some() != request.jump_session_id.is_some()
+        || request
+            .jump_profile_id
+            .as_deref()
+            .is_some_and(|id| id.trim().is_empty())
+        || request
+            .jump_session_id
+            .as_deref()
+            .is_some_and(|id| id.trim().is_empty())
+    {
+        return Some(SshError::new(
+            SshErrorCode::JumpHostUnavailable,
+            "跳板配置或已验证的跳板会话缺失；为避免绕过跳板，未尝试直连目标机。",
+        ));
+    }
     if request.host.trim().is_empty() {
         return Some(SshError::new(
             SshErrorCode::ConnectionFailed,

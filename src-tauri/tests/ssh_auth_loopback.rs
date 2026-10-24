@@ -410,6 +410,8 @@ async fn connect(
                 port,
                 username: TEST_USERNAME.to_owned(),
                 auth,
+                jump_profile_id: None,
+                jump_session_id: None,
                 initial_size: TerminalSize {
                     cols: 100,
                     rows: 30,

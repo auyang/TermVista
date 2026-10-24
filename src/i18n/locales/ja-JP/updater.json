@@ -67,6 +67,10 @@
     "tunnelSave": "ポート転送ルールを保存",
     "tunnelDelete": "ポート転送ルールを削除",
     "tunnelStart": "ポート転送を開始",
-    "tunnelStop": "ポート転送を停止"
+    "tunnelStop": "ポート転送を停止",
+    "socks5Save": "SOCKS5 ルールを保存",
+    "socks5Delete": "SOCKS5 ルールを削除",
+    "socks5Start": "SOCKS5 プロキシを開始",
+    "socks5Stop": "SOCKS5 プロキシを停止"
   }
 }

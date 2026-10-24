@@ -80,6 +80,7 @@
     "canceled": "連線已取消。",
     "inputTooLarge": "輸入內容超過大小限制，已阻止傳送。",
     "internal": "SSH 發生內部錯誤，請關閉並重新建立連線。",
+    "jumpHostUnavailable": "設定的跳板主機無法使用，目標連線已停止，沒有改為直接連線。",
     "unknown": "無法建立連線，請檢查主機、連接埠和網路。"
   },
   "manager": {
@@ -125,9 +126,19 @@
     "clearSavedCredentials": "同時清除已儲存的密碼與私鑰口令",
     "credentialsWillRemain": "已儲存的憑據會保留在本機加密保險庫中，之後仍可手動清除。",
     "deleteProfile": "刪除設定",
+    "proxyJump": {
+      "label": "跳板主機（ProxyJump）",
+      "direct": "直接連線",
+      "unavailable": "設定的跳板主機無法使用，目標連線已停止，沒有改為直接連線。",
+      "invalid": "找不到設定的跳板主機連線。",
+      "nestedUnsupported": "目前只支援單跳 ProxyJump；跳板主機本身不能再設定其他跳板。",
+      "connecting": "跳板主機仍在連線中，請等 SSH 工作階段就緒後再連線目標主機。",
+      "connectFirst": "請先連線並驗證跳板主機，再重試目標伺服器。",
+      "importDependencyMissing": "ProxyJump 主機「{{alias}}」必須是可匯入的 SSH Config 項目，或既有連線設定。"
+    },
     "previewConfig": "預覽 SSH Config",
     "previewConfigDescription": "選取靜態主機項目並匯入為本機連線設定。",
-    "configSafetyNotice": "以唯讀方式解析，不會修改來源檔案。ProxyCommand 與 Match exec 不會執行；目前不會設定 ProxyJump。IdentityFile 只儲存路徑，不會讀取或複製金鑰內容。",
+    "configSafetyNotice": "以唯讀方式解析，不會修改來源檔案。ProxyCommand 與 Match exec 絕不執行；單一靜態 ProxyJump 主機別名會匯入為跳板設定。IdentityFile 只儲存路徑，不會讀取或複製金鑰內容。",
     "noStaticHosts": "沒有可靜態匯入的具體主機。萬用字元 Host 與動態 Match 僅顯示為提示。",
     "privateKeyPath": "私鑰路徑",
     "duplicateProfileSkipped": "已存在同名設定，匯入時會略過。",

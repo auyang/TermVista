@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
     "i18n:check": "node scripts/ci/check-i18n.mjs",
-    "test:polish": "node --experimental-strip-types --test tests/terminal-paste.test.mjs tests/terminal-security.test.mjs tests/reconnect-policy.test.mjs tests/profile-tab-reuse.test.mjs tests/quick-connect.test.mjs tests/connection-tree-order.test.mjs tests/editor-languages.test.mjs tests/monitor-network-chart.test.mjs tests/updater-config.test.mjs tests/updater-artifacts.test.mjs tests/updater-errors.test.mjs tests/i18n-locale.test.mjs tests/i18n-resources.test.mjs tests/workspace-tab-title.test.mjs",
+    "test:polish": "node --experimental-strip-types --test tests/terminal-paste.test.mjs tests/terminal-cursor.test.mjs tests/terminal-security.test.mjs tests/reconnect-policy.test.mjs tests/profile-tab-reuse.test.mjs tests/quick-connect.test.mjs tests/connection-tree-order.test.mjs tests/editor-languages.test.mjs tests/monitor-network-chart.test.mjs tests/updater-config.test.mjs tests/updater-artifacts.test.mjs tests/updater-errors.test.mjs tests/i18n-locale.test.mjs tests/i18n-resources.test.mjs tests/workspace-tab-title.test.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

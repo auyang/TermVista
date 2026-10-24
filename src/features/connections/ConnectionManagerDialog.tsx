@@ -35,6 +35,7 @@ type ProfileDraft = {
   rememberPassword: boolean;
   privateKeyPath: string;
   keyRef: string;
+  jumpProfileId: string;
   autoReconnect: boolean;
 };
 
@@ -56,6 +57,7 @@ const emptyDraft = (): ProfileDraft => ({
   rememberPassword: false,
   privateKeyPath: "",
   keyRef: "",
+  jumpProfileId: "",
   autoReconnect: false,
 });
 
@@ -161,6 +163,7 @@ export function ConnectionManagerDialog() {
       rememberPassword: false,
       privateKeyPath: profile.privateKeyPath,
       keyRef: profile.keyRef ?? "",
+      jumpProfileId: profile.jumpProfileId ?? "",
       autoReconnect: profile.autoReconnect,
     });
     setFormOpen(true);
@@ -210,6 +213,7 @@ export function ConnectionManagerDialog() {
       authMethod: values.authMethod,
       privateKeyPath: values.authMethod === "privateKey" && !values.keyRef ? values.privateKeyPath.trim() : "",
       keyRef: values.authMethod === "privateKey" ? values.keyRef || undefined : undefined,
+      jumpProfileId: values.jumpProfileId || undefined,
       favorite: previous?.favorite ?? false,
       autoReconnect: values.autoReconnect,
       credentialAccounts: clearPreviousCredentials ? [] : previous?.credentialAccounts ?? [],
@@ -341,7 +345,18 @@ export function ConnectionManagerDialog() {
     if (!sshConfigPreview || sshConfigSelection.size === 0) return;
     setSshConfigBusy(true);
     try {
-      const result = await importSshConfig(sshConfigPreview.sourcePath, [...sshConfigSelection]);
+      const aliases = new Set(sshConfigSelection);
+      for (const entry of sshConfigPreview.entries) {
+        if (!aliases.has(entry.alias) || !entry.proxyJump) continue;
+        const existingJump = profiles.some((profile) => profile.name.toLocaleLowerCase() === entry.proxyJump?.toLocaleLowerCase());
+        const configJump = sshConfigPreview.entries.find((candidate) => candidate.alias.toLocaleLowerCase() === entry.proxyJump?.toLocaleLowerCase());
+        if (!existingJump && !configJump?.importable) {
+          toast.error(t("manager.proxyJump.importDependencyMissing", { alias: entry.proxyJump }));
+          return;
+        }
+        if (!existingJump && configJump) aliases.add(configJump.alias);
+      }
+      const result = await importSshConfig(sshConfigPreview.sourcePath, [...aliases]);
       await refreshTree();
       const skipped = result.skippedExistingNames.length;
       toast.success(t("manager.messages.imported", { count: result.imported.length, skipped }));
@@ -517,7 +532,7 @@ export function ConnectionManagerDialog() {
             <Button type="button" size="sm" className="h-7 shrink-0 rounded-sm px-2 text-xs" onClick={showNewForm}><Plus size={13} />{t("manager.newProfileShort")}</Button>
           </div>}
           <div className={`compact-scrollbar overflow-y-auto ${formOpen ? "max-h-[calc(100vh-112px)] min-h-0 px-4 py-4" : "max-h-[min(500px,58vh)] min-h-36 px-3 py-2"}`}>
-            {formOpen ? <ProfileForm draft={draft} setDraft={setDraft} groups={groups} editing={Boolean(editingId)} onSubmit={submitProfile} onCancel={() => { setFormOpen(false); setEditingId(null); setDraft(emptyDraft()); }} /> : filtered.length === 0 && groups.length === 0 ? (
+          {formOpen ? <ProfileForm draft={draft} setDraft={setDraft} groups={groups} profiles={profiles} editingProfileId={editingId} editing={Boolean(editingId)} onSubmit={submitProfile} onCancel={() => { setFormOpen(false); setEditingId(null); setDraft(emptyDraft()); }} /> : filtered.length === 0 && groups.length === 0 ? (
               <div className="flex min-h-32 flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
                 <Server size={18} strokeWidth={1.5} />
                 <span>{search ? t("manager.noProfilesMatch") : t("manager.noSavedProfiles")}</span>
@@ -639,7 +654,7 @@ export function ConnectionManagerDialog() {
                         return next;
                       })} />
                       <span className="min-w-0 flex-1">
-                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium"><span>{entry.alias}</span><span className="font-mono text-muted-foreground">{entry.username}@{entry.hostname}:{entry.port}</span>{entry.identityFile && <span className="text-accent">{t("manager.privateKeyPath")}</span>}</span>
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium"><span>{entry.alias}</span><span className="font-mono text-muted-foreground">{entry.username}@{entry.hostname}:{entry.port}</span>{entry.identityFile && <span className="text-accent">{t("manager.privateKeyPath")}</span>}{entry.proxyJump && <span className="text-accent">ProxyJump: {entry.proxyJump}</span>}</span>
                         {entry.identityFile && <span className="mt-0.5 block truncate font-mono text-[9px] text-muted-foreground" title={entry.identityFile}>{entry.identityFile}</span>}
                         {nameExists && <span className="mt-0.5 block text-[9px] text-amber-800 dark:text-amber-200">{t("manager.duplicateProfileSkipped")}</span>}
                         {!entry.importable && <span className="mt-0.5 block text-[9px] text-amber-800 dark:text-amber-200">{t("manager.dynamicFieldsUnsupported")}</span>}
@@ -661,10 +676,12 @@ export function ConnectionManagerDialog() {
   );
 }
 
-function ProfileForm({ draft, setDraft, groups, editing, onSubmit, onCancel }: {
+function ProfileForm({ draft, setDraft, groups, profiles, editingProfileId, editing, onSubmit, onCancel }: {
   draft: ProfileDraft;
   setDraft: (draft: ProfileDraft) => void;
   groups: ConnectionGroup[];
+  profiles: ConnectionProfile[];
+  editingProfileId: string | null;
   editing: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
@@ -690,6 +707,7 @@ function ProfileForm({ draft, setDraft, groups, editing, onSubmit, onCancel }: {
   }, [draft.authMethod]);
 
   const update = <K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) => setDraft({ ...draft, [key]: value });
+  const jumpProfiles = profiles.filter((profile) => profile.id !== editingProfileId && !profile.jumpProfileId);
   return <form className="mb-3 grid grid-cols-2 gap-2 border border-border bg-background/40 p-2" onSubmit={onSubmit}>
     <label className="col-span-2 grid gap-1 text-[10px] text-muted-foreground">{t("manager.profileName")}<Input className="h-7 rounded-sm text-xs" placeholder={t("manager.profileNamePlaceholder")} value={draft.name} onChange={(event) => update("name", event.target.value)} required /></label>
     <label className="grid gap-1 text-[10px] text-muted-foreground">{t("manager.hostOrIp")}<Input className="h-7 rounded-sm text-xs" placeholder="host.example.com" value={draft.host} onChange={(event) => update("host", event.target.value)} required /></label>
@@ -717,6 +735,7 @@ function ProfileForm({ draft, setDraft, groups, editing, onSubmit, onCancel }: {
       {groups.map((group) => <option key={group.id} value={group.id}>{`${"　".repeat(groupDepth(group, groups))}${group.name}`}</option>)}
     </select></label>
     <label className="grid gap-1 text-[10px] text-muted-foreground">{t("manager.environmentLabel")}<select className="h-7 rounded-sm border border-input bg-background px-2 text-xs text-foreground" value={draft.environment} onChange={(event) => update("environment", event.target.value as ServerEnvironment)}><option value="development">{t("manager.environment.development")}</option><option value="test">{t("manager.environment.test")}</option><option value="production">{t("manager.environment.production")}</option></select></label>
+    <label className="col-span-2 grid gap-1 text-[10px] text-muted-foreground">{t("manager.proxyJump.label")}<select className="h-7 rounded-sm border border-input bg-background px-2 text-xs text-foreground" value={draft.jumpProfileId} onChange={(event) => update("jumpProfileId", event.target.value)}><option value="">{t("manager.proxyJump.direct")}</option>{jumpProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name} · {profile.host}:{profile.port}</option>)}</select></label>
     <label className="grid gap-1 text-[10px] text-muted-foreground">{t("authMethod")}<select className="h-7 rounded-sm border border-input bg-background px-2 text-xs text-foreground" value={draft.authMethod} onChange={(event) => {
       const authMethod = event.target.value as AuthMethod;
       setDraft({ ...draft, authMethod, ...(authMethod !== "password" ? { password: "", rememberPassword: false } : {}), ...(authMethod === "keyboardInteractive" ? { autoReconnect: false } : {}) });

@@ -10,7 +10,8 @@ export type MaintenanceTaskKey =
   | "sftpCreateDirectory" | "sftpRename" | "sftpDelete" | "sftpTransfer"
   | "aiTestProvider" | "aiReadModels" | "vaultUpdate"
   | "sshKeyGenerate" | "sshKeyImport" | "sshKeyExport" | "sshKeyDelete"
-  | "tunnelSave" | "tunnelDelete" | "tunnelStart" | "tunnelStop";
+  | "tunnelSave" | "tunnelDelete" | "tunnelStart" | "tunnelStop"
+  | "socks5Save" | "socks5Delete" | "socks5Start" | "socks5Stop";
 
 type UpdateMaintenanceTaskState = {
   tasks: UpdateMaintenanceTask[];

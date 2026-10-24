@@ -112,33 +112,33 @@ export function AiProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(540px,calc(100vw-24px))] gap-3 p-4">
-        <div>
+      <DialogContent className="box-border w-[min(560px,calc(100vw-32px))] max-w-[calc(100vw-32px)] gap-3 p-4 sm:p-5">
+        <div className="min-w-0">
           <DialogTitle>{t("provider.title")}</DialogTitle>
           <DialogDescription className="mt-1">{t("provider.description")}</DialogDescription>
         </div>
-        <form className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1" onSubmit={(event) => void save(event)}>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1 text-[11px] text-muted-foreground">
+        <form className="box-border flex min-h-0 w-full min-w-0 flex-col gap-3 overflow-y-auto px-1" onSubmit={(event) => void save(event)}>
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="grid min-w-0 gap-1 text-[11px] text-muted-foreground">
               {t("provider.configName")}
-              <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} required className="h-8 rounded-sm text-xs" placeholder={kind === "ollama" ? t("provider.ollamaExample") : t("provider.apiExample")} />
+              <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} required className="h-8 w-full min-w-0 rounded-sm text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0" placeholder={kind === "ollama" ? t("provider.ollamaExample") : t("provider.apiExample")} />
             </label>
-            <label className="grid gap-1 text-[11px] text-muted-foreground">
+            <label className="grid min-w-0 gap-1 text-[11px] text-muted-foreground">
               {t("provider.serviceType")}
-              <select value={kind} onChange={(event) => chooseKind(event.target.value as AiProviderKind)} className="h-8 rounded-sm border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              <select value={kind} onChange={(event) => chooseKind(event.target.value as AiProviderKind)} className="h-8 w-full min-w-0 rounded-sm border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring">
                 <option value="openAiCompatible">{t("provider.openAiCompatible")}</option>
                 <option value="ollama">{t("provider.ollamaLocal")}</option>
               </select>
             </label>
           </div>
-          <label className="grid gap-1 text-[11px] text-muted-foreground">
+          <label className="grid min-w-0 gap-1 text-[11px] text-muted-foreground">
             {kind === "ollama" ? t("provider.ollamaAddress") : t("provider.apiAddress")}
-            <Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} maxLength={600} required className="h-8 rounded-sm font-mono text-[11px]" placeholder={kind === "ollama" ? "http://127.0.0.1:11434" : "https://api.example.com/v1"} autoComplete="off" />
+            <Input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} maxLength={600} required className="h-8 w-full min-w-0 rounded-sm font-mono text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0" placeholder={kind === "ollama" ? "http://127.0.0.1:11434" : "https://api.example.com/v1"} autoComplete="off" />
           </label>
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
             <label className="grid min-w-0 gap-1 text-[11px] text-muted-foreground">
               {t("provider.modelName")}
-              <Input list={kind === "ollama" ? "ollama-model-options" : undefined} value={model} onChange={(event) => setModel(event.target.value)} maxLength={160} required className="h-8 rounded-sm text-xs" placeholder={kind === "ollama" ? t("provider.discoverPlaceholder") : "model-name"} autoComplete="off" />
+              <Input list={kind === "ollama" ? "ollama-model-options" : undefined} value={model} onChange={(event) => setModel(event.target.value)} maxLength={160} required className="h-8 w-full min-w-0 rounded-sm text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0" placeholder={kind === "ollama" ? t("provider.discoverPlaceholder") : "model-name"} autoComplete="off" />
               {kind === "ollama" && <datalist id="ollama-model-options">{models.map((item) => <option key={item.id} value={item.id} />)}</datalist>}
             </label>
             {kind === "ollama" && <Button type="button" variant="outline" size="sm" className="h-8 rounded-sm px-2 text-[10px]" onClick={() => void discoverModels()} disabled={modelsLoading || saving}>{modelsLoading ? t("provider.discovering") : t("provider.discover")}</Button>}
@@ -147,15 +147,15 @@ export function AiProviderDialog({
             streaming: models.find((item) => item.id === model)?.streaming ? t("provider.supported") : t("provider.unknown"),
             tools: models.find((item) => item.id === model)?.toolCalling === undefined ? t("provider.unknown") : models.find((item) => item.id === model)?.toolCalling ? t("provider.supported") : t("provider.unsupported"),
           })}</p>}
-          {kind === "openAiCompatible" && <label className="grid gap-1 text-[11px] text-muted-foreground">
+          {kind === "openAiCompatible" && <label className="grid min-w-0 gap-1 text-[11px] text-muted-foreground">
             {t("provider.apiKey")} {provider?.apiKeyConfigured ? t("provider.savedKeepBlank") : ""}
-            <Input type="password" value={apiKey} onChange={(event) => { setApiKey(event.target.value); if (event.target.value) setClearApiKey(false); }} maxLength={4096} className="h-8 rounded-sm font-mono text-xs" placeholder={provider?.apiKeyConfigured ? t("provider.keepSavedCredential") : t("provider.enterApiKey")} autoComplete="new-password" spellCheck={false} />
+            <Input type="password" value={apiKey} onChange={(event) => { setApiKey(event.target.value); if (event.target.value) setClearApiKey(false); }} maxLength={4096} className="h-8 w-full min-w-0 rounded-sm font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0" placeholder={provider?.apiKeyConfigured ? t("provider.keepSavedCredential") : t("provider.enterApiKey")} autoComplete="new-password" spellCheck={false} />
           </label>}
           {kind === "ollama" && provider?.apiKeyConfigured && <p className="text-[10px] text-muted-foreground">{t("provider.ollamaStoredKey")}</p>}
-          <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1 text-[11px] text-muted-foreground">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="grid min-w-0 gap-1 text-[11px] text-muted-foreground">
               {t("provider.timeout")}
-              <Input type="number" min={3} max={300} value={timeoutSeconds} onChange={(event) => setTimeoutSeconds(event.target.value)} className="h-8 rounded-sm text-xs" />
+              <Input type="number" min={3} max={300} value={timeoutSeconds} onChange={(event) => setTimeoutSeconds(event.target.value)} className="h-8 w-full min-w-0 rounded-sm text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0" />
             </label>
             <div className="grid content-end gap-1 text-[11px] text-muted-foreground">
               {t("provider.authentication")}
@@ -175,7 +175,7 @@ export function AiProviderDialog({
             {t("provider.deleteKey")}
           </label>}
           {testMessage && <div className="rounded-sm border border-border bg-panel-header px-2 py-1.5 text-[11px] text-muted-foreground" role="status">{testMessage}</div>}
-          <footer className="flex items-center justify-between border-t border-border pt-2">
+          <footer className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
             <Button type="button" variant="outline" size="sm" className="h-7 rounded-sm text-[11px]" onClick={() => void test()} disabled={testing || saving || !provider?.id || (provider.kind === "openAiCompatible" && !provider.apiKeyConfigured) || Boolean(apiKey) || kind !== provider?.kind}>{testing ? t("provider.testing") : t("provider.test")}</Button>
             <div className="flex gap-2">
               <Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm text-[11px]" onClick={() => onOpenChange(false)}>{t("provider.cancel")}</Button>

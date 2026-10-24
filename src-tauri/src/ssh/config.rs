@@ -28,8 +28,26 @@ pub struct SshConfigPreviewEntry {
     pub identity_file: Option<String>,
     pub identities_only: Option<bool>,
     pub proxy_jump: Option<String>,
+    pub local_forwards: Vec<SshConfigLocalForward>,
+    pub dynamic_forwards: Vec<SshConfigDynamicForward>,
     pub importable: bool,
     pub warnings: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshConfigLocalForward {
+    pub bind_host: String,
+    pub bind_port: u16,
+    pub target_host: String,
+    pub target_port: u16,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SshConfigDynamicForward {
+    pub bind_host: String,
+    pub bind_port: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -256,6 +274,8 @@ impl Parser {
             let mut identity_files = Vec::new();
             let mut identities_only = None;
             let mut proxy_jump = None;
+            let mut local_forwards = Vec::new();
+            let mut dynamic_forwards = Vec::new();
             let mut entry_warnings = Vec::new();
             let mut invalid_entry = false;
 
@@ -300,6 +320,20 @@ impl Parser {
                         "proxyjump" if proxy_jump.is_none() => {
                             proxy_jump = Some(directive.value.clone());
                         }
+                        "localforward" => match parse_local_forward(&directive.value) {
+                            Some(forward) => local_forwards.push(forward),
+                            None => entry_warnings.push(format!(
+                                "{}：LocalForward 格式无效或监听地址不是 127.0.0.1，已跳过。",
+                                directive.location
+                            )),
+                        },
+                        "dynamicforward" => match parse_dynamic_forward(&directive.value) {
+                            Some(forward) => dynamic_forwards.push(forward),
+                            None => entry_warnings.push(format!(
+                                "{}：DynamicForward 格式无效或监听地址不是 127.0.0.1，已跳过。",
+                                directive.location
+                            )),
+                        },
                         "proxycommand" => entry_warnings.push(format!(
                             "{}：ProxyCommand 已识别，但不会执行，也不会写入连接配置。",
                             directive.location
@@ -315,9 +349,13 @@ impl Parser {
                 }
             }
 
-            if let Some(jump) = proxy_jump.as_ref() {
+            let proxy_jump = proxy_jump.filter(|jump| !jump.eq_ignore_ascii_case("none"));
+            if let Some(jump) = proxy_jump.as_ref()
+                && !is_proxy_jump_alias(jump)
+            {
+                invalid_entry = true;
                 entry_warnings.push(format!(
-                    "ProxyJump“{jump}”已识别；当前版本不会配置跳板，导入后将使用直连。"
+                    "ProxyJump“{jump}”不是单个静态主机别名；只支持单跳别名，不会执行 ProxyCommand。"
                 ));
             }
             if identities_only.is_some() {
@@ -367,6 +405,8 @@ impl Parser {
                 identity_file,
                 identities_only,
                 proxy_jump,
+                local_forwards,
+                dynamic_forwards,
                 importable,
                 warnings: deduplicate_warnings(entry_warnings),
             });
@@ -377,6 +417,74 @@ impl Parser {
             warnings: deduplicate_warnings(self.warnings),
         }
     }
+}
+
+fn parse_local_forward(value: &str) -> Option<SshConfigLocalForward> {
+    let words = parse_words(value);
+    if words.len() != 2 {
+        return None;
+    }
+    let (bind_host, bind_port) = parse_loopback_bind(&words[0])?;
+    let (target_host, target_port) = parse_host_port(&words[1])?;
+    let mut normalized = crate::tunnels::models::ForwardRule {
+        id: "ssh-config-preview".to_owned(),
+        profile_id: "ssh-config-preview".to_owned(),
+        name: "SSH Config preview".to_owned(),
+        group_name: String::new(),
+        local_host: bind_host.clone(),
+        local_port: u32::from(bind_port),
+        target_host,
+        target_port: u32::from(target_port),
+        created_at: 0,
+        updated_at: 0,
+    };
+    normalized.validate_and_normalize().ok()?;
+    Some(SshConfigLocalForward {
+        bind_host,
+        bind_port,
+        target_host: normalized.target_host,
+        target_port,
+    })
+}
+
+fn parse_dynamic_forward(value: &str) -> Option<SshConfigDynamicForward> {
+    let words = parse_words(value);
+    if words.len() != 1 {
+        return None;
+    }
+    let (bind_host, bind_port) = parse_loopback_bind(&words[0])?;
+    Some(SshConfigDynamicForward {
+        bind_host,
+        bind_port,
+    })
+}
+
+fn parse_loopback_bind(value: &str) -> Option<(String, u16)> {
+    if let Ok(port) = value.parse::<u16>() {
+        return (port > 0).then(|| ("127.0.0.1".to_owned(), port));
+    }
+    let (host, port) = parse_host_port(value)?;
+    if host == "127.0.0.1" || host.eq_ignore_ascii_case("localhost") {
+        Some(("127.0.0.1".to_owned(), port))
+    } else {
+        None
+    }
+}
+
+fn parse_host_port(value: &str) -> Option<(String, u16)> {
+    let (host, raw_port) = if let Some(rest) = value.strip_prefix('[') {
+        let (host, rest) = rest.split_once(']')?;
+        let raw_port = rest.strip_prefix(':')?;
+        (host, raw_port)
+    } else {
+        value.rsplit_once(':')?
+    };
+    let port = raw_port.parse::<u16>().ok().filter(|port| *port > 0)?;
+    let host = host.trim();
+    if host.is_empty() || host.chars().any(char::is_whitespace) {
+        return None;
+    }
+    Some((host.to_owned(), port))
 }
 
 pub fn preview(path: &Path) -> Result<SshConfigPreview, String> {
@@ -495,6 +603,10 @@ fn is_static_alias(value: &str) -> bool {
         && !value.contains(['*', '?', '%', '/', '\\'])
         && !value.chars().any(char::is_whitespace)
         && !value.chars().any(char::is_control)
+}
+
+fn is_proxy_jump_alias(value: &str) -> bool {
+    is_static_alias(value) && !value.contains(['@', ':', ','])
 }
 
 fn host_patterns_match(patterns: &[String], host: &str) -> bool {
@@ -680,6 +792,63 @@ mod tests {
         assert_eq!(result.entries[0].username, "deploy");
         assert_eq!(result.entries[0].port, 2222);
         assert_eq!(fs::read_to_string(&config_path).unwrap(), config);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn imports_only_one_static_proxyjump_alias_and_rejects_multi_hop() {
+        let directory = temp_dir();
+        fs::create_dir_all(&directory).unwrap();
+        let config_path = directory.join("config");
+        fs::write(
+            &config_path,
+            "Host gateway\n HostName gateway.example.test\nHost app\n HostName app.internal\n ProxyJump gateway\nHost multi\n HostName multi.internal\n ProxyJump gateway,backup\n",
+        )
+        .unwrap();
+        let result = preview(&config_path).unwrap();
+        let app = result
+            .entries
+            .iter()
+            .find(|entry| entry.alias == "app")
+            .unwrap();
+        assert_eq!(app.proxy_jump.as_deref(), Some("gateway"));
+        assert!(app.importable);
+        let multi = result
+            .entries
+            .iter()
+            .find(|entry| entry.alias == "multi")
+            .unwrap();
+        assert!(!multi.importable);
+        assert!(
+            multi
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("單跳") || warning.contains("单跳"))
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn imports_loopback_localforward_and_dynamicforward_but_skips_external_binds() {
+        let directory = temp_dir();
+        fs::create_dir_all(&directory).unwrap();
+        let config_path = directory.join("config");
+        fs::write(
+            &config_path,
+            "Host app\n HostName app.example.test\n LocalForward 127.0.0.1:13306 127.0.0.1:3306\n LocalForward 0.0.0.0:9000 app.internal:9000\n DynamicForward 1080\n DynamicForward 0.0.0.0:1081\n",
+        )
+        .unwrap();
+
+        let preview = preview(&config_path).unwrap();
+        let entry = &preview.entries[0];
+        assert_eq!(entry.local_forwards.len(), 1);
+        assert_eq!(entry.local_forwards[0].bind_host, "127.0.0.1");
+        assert_eq!(entry.local_forwards[0].bind_port, 13_306);
+        assert_eq!(entry.local_forwards[0].target_host, "127.0.0.1");
+        assert_eq!(entry.local_forwards[0].target_port, 3_306);
+        assert_eq!(entry.dynamic_forwards.len(), 1);
+        assert_eq!(entry.dynamic_forwards[0].bind_port, 1_080);
+        assert_eq!(entry.warnings.len(), 2);
         fs::remove_dir_all(directory).unwrap();
     }
 }

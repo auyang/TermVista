@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import i18next from "i18next";
 import { toast } from "sonner";
 import { useWorkspaceStore, type AuthMethod, type ConnectionProfile } from "@/stores/workspaceStore";
 import { saveConnectionProfile } from "@/features/connections/profileBridge";
@@ -48,6 +49,44 @@ function errorCode(error: unknown) {
   return "connectionFailed";
 }
 
+function localizedErrorMessage(error: unknown) {
+  return errorCode(error) === "jumpHostUnavailable"
+    ? i18next.t("connections:manager.proxyJump.unavailable")
+    : errorMessage(error);
+}
+
+function connectedSessionForProfile(profileId: string) {
+  return Object.values(useSshSessionStore.getState().sessions).find((session) =>
+    session.profile.id === profileId && session.state === "connected" && Boolean(session.sessionId),
+  );
+}
+
+async function ensureJumpSession(profile: ConnectionProfile): Promise<{ ok: true; sessionId?: string } | { ok: false }> {
+  if (!profile.jumpProfileId) return { ok: true };
+  const jumpProfile = useWorkspaceStore.getState().profiles.find((item) => item.id === profile.jumpProfileId);
+  if (!jumpProfile || jumpProfile.id === profile.id) {
+    toast.error(i18next.t("connections:manager.proxyJump.invalid"));
+    return { ok: false };
+  }
+  if (jumpProfile.jumpProfileId) {
+    toast.error(i18next.t("connections:manager.proxyJump.nestedUnsupported"));
+    return { ok: false };
+  }
+  const connected = connectedSessionForProfile(jumpProfile.id);
+  if (connected?.sessionId) return { ok: true, sessionId: connected.sessionId };
+  const inProgress = Object.values(useSshSessionStore.getState().sessions).some((session) =>
+    session.profile.id === jumpProfile.id && ["connecting", "verifyingHostKey", "authenticating", "openingPty"].includes(session.state),
+  );
+  if (inProgress) {
+    toast.message(i18next.t("connections:manager.proxyJump.connecting"));
+    return { ok: false };
+  }
+  const result = await connectProfile(jumpProfile);
+  if (result?.sessionId) return { ok: true, sessionId: result.sessionId };
+  toast.message(i18next.t("connections:manager.proxyJump.connectFirst"));
+  return { ok: false };
+}
+
 function releaseAttempt(attemptId: string, cancelRecovery = true) {
   if (cancelRecovery) stopAutoReconnect(attemptId, false);
   const session = useSshSessionStore.getState().sessions[attemptId];
@@ -95,7 +134,10 @@ function sshChannels(attemptId: string) {
   const onStatus = new Channel<SshStatusEvent>();
   onStatus.onmessage = (event) => {
     const before = useSshSessionStore.getState().sessions[attemptId];
-    useSshSessionStore.getState().applyStatus(event);
+    const localizedEvent = event.error
+      ? { ...event, error: { ...event.error, message: localizedErrorMessage(event.error) } }
+      : event;
+    useSshSessionStore.getState().applyStatus(localizedEvent);
     if (event.state === "error" && before?.state === "connected") beginAutoReconnect(attemptId, event.error?.code);
   };
   const onHostKey = new Channel<HostKeyChallenge>();
@@ -112,6 +154,13 @@ export async function connectSsh(
   rememberCredential = false,
   replaceTabId?: string,
 ) {
+  const jumpSessionId = profile.jumpProfileId
+    ? connectedSessionForProfile(profile.jumpProfileId)?.sessionId
+    : undefined;
+  if (profile.jumpProfileId && !jumpSessionId) {
+    toast.error(i18next.t("connections:manager.proxyJump.unavailable"));
+    return null;
+  }
   const attemptId = createAttemptId();
   const authMethod: AuthMethod = auth.method;
   const updatedProfile = {
@@ -135,6 +184,7 @@ export async function connectSsh(
     host: profile.host,
     port: profile.port || 22,
     username,
+    jumpSessionId,
     auth,
     rememberCredential,
     initialSize: { cols: 80, rows: 24 },
@@ -169,7 +219,7 @@ export async function connectSsh(
       useSshSessionStore.getState().applyStatus({
         attemptId,
         state: "error",
-        error: { code: errorCode(error), message: errorMessage(error) },
+        error: { code: errorCode(error), message: localizedErrorMessage(error) },
       });
     }
     return null;
@@ -200,7 +250,13 @@ async function connectSavedSsh(
   profile: ConnectionProfile,
   replaceTabId?: string,
   recovery?: { run: AutoReconnectRun; attempt: number },
+  jumpSessionId = profile.jumpProfileId ? connectedSessionForProfile(profile.jumpProfileId)?.sessionId : undefined,
 ) {
+  if (profile.jumpProfileId && !jumpSessionId) {
+    if (recovery) toast.warning(i18next.t("connections:manager.proxyJump.unavailable"));
+    else toast.error(i18next.t("connections:manager.proxyJump.unavailable"));
+    return null;
+  }
   const username = profile.username.trim();
   const attemptId = createAttemptId();
   prepareAttempt(profile, username, attemptId, replaceTabId, recovery);
@@ -212,6 +268,7 @@ async function connectSavedSsh(
       host: profile.host,
       port: profile.port || 22,
       username,
+      jumpSessionId,
       authMethod: profile.authMethod,
       privateKeyPath: profile.privateKeyPath || null,
       keyRef: profile.keyRef ?? null,
@@ -228,7 +285,7 @@ async function connectSavedSsh(
     return result;
   } catch (error) {
     const code = errorCode(error);
-    const message = errorMessage(error);
+    const message = localizedErrorMessage(error);
     const session = useSshSessionStore.getState().sessions[attemptId];
     if (session && session.state !== "error" && session.state !== "canceled") {
       useSshSessionStore.getState().applyStatus({
@@ -245,6 +302,8 @@ async function connectSavedSsh(
 }
 
 export async function connectProfile(profile: ConnectionProfile, replaceTabId?: string) {
+  const route = await ensureJumpSession(profile);
+  if (!route.ok) return null;
   const username = profile.username.trim();
   if (!username || username === "未设置") {
     useSshSessionStore.getState().openCredentials(profile, replaceTabId, "请先输入 SSH 用户名和本次连接凭据。");
@@ -282,7 +341,7 @@ export async function connectProfile(profile: ConnectionProfile, replaceTabId?: 
     useSshSessionStore.getState().openCredentials(profile, replaceTabId, "登录凭据保险库已锁定或不可用，请手动输入私钥口令或尝试无口令私钥。");
     return null;
   }
-  return connectSavedSsh(profile, replaceTabId);
+  return connectSavedSsh(profile, replaceTabId, undefined, route.sessionId);
 }
 
 function beginAutoReconnect(attemptId: string, errorCode?: string) {

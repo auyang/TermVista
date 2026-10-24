@@ -18,7 +18,7 @@ use tokio::{
     task::JoinHandle,
     time::{timeout, timeout_at},
 };
-use tokio_util::sync::CancellationToken;
+use tokio_util::{either::Either, sync::CancellationToken};
 use zeroize::Zeroizing;
 
 use super::{
@@ -52,24 +52,29 @@ pub struct RusshBackend;
 
 #[async_trait]
 impl SshBackend for RusshBackend {
-    async fn connect(&self, context: SshConnectContext) -> Result<BackendSession, SshError> {
-        let socket = match cancelable(
-            &context.attempt,
-            timeout(
-                connection_timeout(),
-                TcpStream::connect((context.request.host.as_str(), context.request.port)),
-            ),
-        )
-        .await?
-        {
-            Err(_) => {
-                return Err(SshError::new(
-                    SshErrorCode::ConnectionTimeout,
-                    "连接服务器超时，请检查地址和网络。",
-                ));
-            }
-            Ok(Err(error)) => return Err(map_io_error(error)),
-            Ok(Ok(socket)) => socket,
+    async fn connect(&self, mut context: SshConnectContext) -> Result<BackendSession, SshError> {
+        let socket = if let Some(stream) = context.initial_stream.take() {
+            Either::Left(stream)
+        } else {
+            let socket = match cancelable(
+                &context.attempt,
+                timeout(
+                    connection_timeout(),
+                    TcpStream::connect((context.request.host.as_str(), context.request.port)),
+                ),
+            )
+            .await?
+            {
+                Err(_) => {
+                    return Err(SshError::new(
+                        SshErrorCode::ConnectionTimeout,
+                        "连接服务器超时，请检查地址和网络。",
+                    ));
+                }
+                Ok(Err(error)) => return Err(map_io_error(error)),
+                Ok(Ok(socket)) => socket,
+            };
+            Either::Right(socket)
         };
 
         let handler_error = Arc::new(Mutex::new(None));

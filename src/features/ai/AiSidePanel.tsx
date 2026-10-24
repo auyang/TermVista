@@ -348,6 +348,7 @@ function AiPanelBody({ onClose }: { onClose: () => void }) {
     if (source.kind === "sftpSelectedText") return t("panel.sourceSftp", { path: source.remotePath });
     if (source.kind === "editorSelection") return t("panel.sourceEditorSelection");
     if (source.kind === "editorBuffer") return source.dirty ? t("panel.sourceEditorBuffer") : t("panel.sourceEditorSavedBuffer");
+    if (source.kind === "tunnelRule") return t("panel.sourceTunnelRule");
     return t("panel.sourceDiagnostics", { count: source.evidenceIds.length });
   };
 

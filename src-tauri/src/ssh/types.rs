@@ -56,6 +56,7 @@ pub enum SshErrorCode {
     ConnectionTimeout,
     ConnectionRefused,
     ConnectionFailed,
+    JumpHostUnavailable,
     ServerClosed,
     ChannelOpenFailed,
     PtyRequestFailed,
@@ -171,6 +172,8 @@ pub struct SshConnectRequest {
     pub port: u16,
     pub username: String,
     pub auth: SshAuth,
+    pub jump_profile_id: Option<String>,
+    pub jump_session_id: Option<String>,
     pub initial_size: TerminalSize,
 }
 

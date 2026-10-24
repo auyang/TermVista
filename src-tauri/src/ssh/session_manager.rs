@@ -1,6 +1,9 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use tokio::sync::{Mutex, oneshot, watch};
+use tokio::{
+    sync::{Mutex, oneshot, watch},
+    time::timeout,
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -331,16 +334,22 @@ impl SessionManager {
             .insert(attempt_id.clone(), output_flow);
         events.send_status(SshState::Connecting, None);
 
-        let result = self
-            .backend
-            .connect(super::backend::SshConnectContext {
-                request,
-                session_id: session_id.clone(),
-                events: events.clone(),
-                host_keys: Arc::clone(&self.host_keys),
-                attempt: Arc::clone(&attempt),
-            })
-            .await;
+        let initial_stream = self.open_jump_stream(&request, &attempt).await;
+        let result = match initial_stream {
+            Ok(initial_stream) => {
+                self.backend
+                    .connect(super::backend::SshConnectContext {
+                        request,
+                        session_id: session_id.clone(),
+                        initial_stream,
+                        events: events.clone(),
+                        host_keys: Arc::clone(&self.host_keys),
+                        attempt: Arc::clone(&attempt),
+                    })
+                    .await
+            }
+            Err(error) => Err(error),
+        };
         self.attempts.lock().await.remove(&attempt_id);
 
         let BackendSession {
@@ -389,6 +398,72 @@ impl SessionManager {
         events.send_status(SshState::Connected, None);
         self.watch_termination(session_id.clone(), termination);
         Ok(session_id)
+    }
+
+    async fn open_jump_stream(
+        &self,
+        request: &SshConnectRequest,
+        attempt: &AttemptControl,
+    ) -> Result<Option<russh::ChannelStream<russh::client::Msg>>, SshError> {
+        match (
+            request.jump_profile_id.as_deref(),
+            request.jump_session_id.as_deref(),
+        ) {
+            (None, None) => Ok(None),
+            (Some(jump_profile_id), Some(jump_session_id)) => {
+                let transport = {
+                    let sessions = self.inner.sessions.lock().await;
+                    let record = sessions.get(jump_session_id).ok_or_else(|| {
+                        SshError::new(
+                            SshErrorCode::JumpHostUnavailable,
+                            "跳板机 SSH 会话不存在或已断开；为避免绕过跳板，未尝试直连目标机。",
+                        )
+                    })?;
+                    let termination = record.termination.borrow().clone();
+                    if record.summary.profile_id != jump_profile_id
+                        || record.summary.state != SshState::Connected
+                        || termination != SessionTermination::Running
+                        || record.transport.host_key_identity().is_none()
+                    {
+                        return Err(SshError::new(
+                            SshErrorCode::JumpHostUnavailable,
+                            "跳板机会话未连接、身份未验证或与配置不匹配；为避免绕过跳板，未尝试直连目标机。",
+                        ));
+                    }
+                    Arc::clone(&record.transport)
+                };
+                let stream = tokio::select! {
+                    result = timeout(
+                        super::backend::connection_timeout(),
+                        transport.open_direct_tcpip(
+                            &request.host,
+                            u32::from(request.port),
+                            "127.0.0.1",
+                            0,
+                        ),
+                    ) => match result {
+                        Err(_) => return Err(SshError::new(
+                            SshErrorCode::JumpHostUnavailable,
+                            "通过跳板机连接目标地址超时；未尝试直连目标机。",
+                        )),
+                        Ok(Err(error)) => return Err(SshError::new(
+                            SshErrorCode::JumpHostUnavailable,
+                            format!("跳板机无法建立到目标地址的 SSH 通道：{}；未尝试直连。", error.message),
+                        )),
+                        Ok(Ok(stream)) => stream,
+                    },
+                    _ = attempt.canceled() => return Err(SshError::new(
+                        SshErrorCode::Canceled,
+                        "SSH 连接已取消。",
+                    )),
+                };
+                Ok(Some(stream))
+            }
+            _ => Err(SshError::new(
+                SshErrorCode::JumpHostUnavailable,
+                "跳板配置或已验证的跳板会话缺失；为避免绕过跳板，未尝试直连目标机。",
+            )),
+        }
     }
 
     fn watch_termination(

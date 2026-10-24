@@ -89,6 +89,7 @@
     "sourceEditorBuffer": "Monaco の未保存バッファ",
     "sourceEditorSavedBuffer": "Monaco バッファ",
     "sourceDiagnostics": "診断証拠：{{count}} 件",
+    "sourceTunnelRule": "選択中の SSH トンネルルールと実行状態",
     "openAiCompatible": "OpenAI 互換 API"
   },
   "prompts": {
@@ -129,8 +130,8 @@
     "authentication": "認証",
     "localNoKey": "ローカルサービス · API キーなし",
     "systemCredential": "API キー · システム資格情報ストア",
-    "allowHttp": "平文 HTTP を許可します。HTTP では API キーとリクエスト内容が公開されます。明示的に設定したサービスアドレスでのみ使用してください。",
-    "allowRemoteOllamaHttp": "リモート Ollama への平文 HTTP を許可します。通信は暗号化されません。HTTPS を推奨します。",
+    "allowHttp": "HTTP 接続を許可（暗号化なし）",
+    "allowRemoteOllamaHttp": "リモート Ollama の HTTP を許可",
     "deleteKey": "保存済み API キーを削除",
     "test": "接続テスト",
     "testing": "テスト中…",

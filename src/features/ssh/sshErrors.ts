@@ -6,6 +6,7 @@ const sshErrorCodes = new Set([
   "DnsResolutionFailed", "ConnectionTimeout", "ConnectionRefused", "ConnectionFailed",
   "ServerClosed", "ChannelOpenFailed", "PtyRequestFailed", "ShellRequestFailed",
   "SessionNotFound", "SessionClosed", "Canceled", "InputTooLarge", "Internal",
+  "jumpHostUnavailable",
 ]);
 
 export function localizedSshError(code?: string) {

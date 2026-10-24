@@ -89,6 +89,7 @@
     "sourceEditorBuffer": "Monaco unsaved buffer",
     "sourceEditorSavedBuffer": "Monaco buffer",
     "sourceDiagnostics": "Diagnostic evidence: {{count}} item(s)",
+    "sourceTunnelRule": "Selected SSH tunnel rule and runtime",
     "openAiCompatible": "OpenAI-compatible API"
   },
   "prompts": {
@@ -129,8 +130,8 @@
     "authentication": "Authentication",
     "localNoKey": "Local service · no API key",
     "systemCredential": "API key · system credential store",
-    "allowHttp": "Allow plaintext HTTP. HTTP exposes the API key and request content; use only for a service address that you explicitly configured.",
-    "allowRemoteOllamaHttp": "Allow plaintext HTTP to a remote Ollama service. Traffic is unencrypted; HTTPS is recommended.",
+    "allowHttp": "Allow HTTP (unencrypted)",
+    "allowRemoteOllamaHttp": "Allow HTTP for remote Ollama",
     "deleteKey": "Delete saved API key",
     "test": "Test connection",
     "testing": "Testing…",

@@ -56,6 +56,7 @@ export type SshConnectArgs = {
   host: string;
   port: number;
   username: string;
+  jumpSessionId?: string;
   auth: SshAuth;
   rememberCredential: boolean;
   initialSize: { cols: number; rows: number };

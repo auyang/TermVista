@@ -4,7 +4,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::tunnels::ForwardRule;
+use crate::tunnels::{ForwardRule, Socks5Rule};
 
 #[derive(Clone, Copy)]
 pub enum AuditAction {
@@ -74,6 +74,8 @@ pub struct ConnectionProfile {
     pub private_key_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jump_profile_id: Option<String>,
     pub environment: String,
     pub favorite: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -97,6 +99,13 @@ pub struct ConnectionGroup {
 pub struct SshConfigImportResult {
     pub imported: Vec<String>,
     pub skipped_existing_names: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TunnelRulesImportResult {
+    pub imported: usize,
+    pub skipped: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -155,9 +164,9 @@ impl ConnectionProfilesStore {
         let version: i32 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .map_err(database_error)?;
-        if version > 4 {
+        if version > 6 {
             return Err(format!(
-                "连接数据库版本 {version} 高于当前应用支持的版本 4；为保护用户数据，已停止启动。"
+                "连接数据库版本 {version} 高于当前应用支持的版本 6；为保护用户数据，已停止启动。"
             ));
         }
         let phase4b_identity_pending = !migration_applied(&connection, "phase4b_identity_v1")?;
@@ -166,15 +175,19 @@ impl ConnectionProfilesStore {
         let phase4b_nonce_ledger_pending =
             !migration_applied(&connection, "phase4b_nonce_ledger_v3")?;
         let phase4b_tunnels_pending = !migration_applied(&connection, "phase4b_tunnels_v1")?;
+        let phase4d_socks5_pending = !migration_applied(&connection, "phase4d_socks5_v1")?;
+        let phase4d_proxyjump_pending = !migration_applied(&connection, "phase4d_proxyjump_v1")?;
         if has_existing_data && version < 3 {
             backup_database_before_phase4a_migration(&connection, path)?;
         } else if has_existing_data
             && (phase4b_identity_pending
                 || phase4b_envelope_pending
                 || phase4b_nonce_ledger_pending
-                || phase4b_tunnels_pending)
+                || phase4b_tunnels_pending
+                || phase4d_socks5_pending
+                || phase4d_proxyjump_pending)
         {
-            backup_database_before_phase4b_migration(&connection, path)?;
+            backup_database_before_phase4d_migration(&connection, path)?;
         }
         Self::from_connection(connection)
     }
@@ -238,8 +251,11 @@ impl ConnectionProfilesStore {
         migrate_phase4b_vault_envelope(&mut connection)?;
         migrate_phase4b_nonce_ledger(&mut connection)?;
         migrate_phase4b_tunnels(&mut connection)?;
+        migrate_phase4d_socks5(&mut connection)?;
+        migrate_phase4d_tunnel_groups(&mut connection)?;
+        migrate_phase4d_proxyjump(&mut connection)?;
         connection
-            .pragma_update(None, "user_version", 4)
+            .pragma_update(None, "user_version", 6)
             .map_err(database_error)?;
         Ok(Self {
             connection: Mutex::new(connection),
@@ -379,13 +395,14 @@ impl ConnectionProfilesStore {
 
     pub fn import_ssh_config_profiles(
         &self,
-        mut profiles: Vec<ConnectionProfile>,
+        mut profiles: Vec<(ConnectionProfile, Option<String>)>,
     ) -> Result<SshConfigImportResult, String> {
         let mut connection = self
             .connection
             .lock()
             .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?;
         let transaction = connection.transaction().map_err(database_error)?;
+        profiles.sort_by_key(|(_, jump_alias)| usize::from(jump_alias.is_some()));
         let group_id = ensure_group_for_name(&transaction, "SSH Config")?;
         let mut sort_order: i64 = transaction
             .query_row(
@@ -399,7 +416,29 @@ impl ConnectionProfilesStore {
             skipped_existing_names: Vec::new(),
         };
         let mut imported_names = std::collections::HashSet::new();
-        for profile in &mut profiles {
+        let mut alias_ids = {
+            let mut statement = transaction
+                .prepare("SELECT id, name FROM connection_profiles")
+                .map_err(database_error)?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(database_error)?;
+            let mut ids = std::collections::HashMap::new();
+            for row in rows {
+                let (id, name) = row.map_err(database_error)?;
+                ids.insert(name.to_ascii_lowercase(), id);
+            }
+            ids
+        };
+        for (profile, _) in &profiles {
+            let name = profile.name.trim();
+            alias_ids
+                .entry(name.to_ascii_lowercase())
+                .or_insert_with(|| profile.id.clone());
+        }
+        for (profile, jump_alias) in &mut profiles {
             let name = profile.name.trim().to_owned();
             if name.is_empty() || name.chars().count() > 128 || name.chars().any(char::is_control) {
                 return Err("SSH Config 中存在无效的主机别名，未导入任何连接。".to_owned());
@@ -414,6 +453,15 @@ impl ConnectionProfilesStore {
             if already_exists || !imported_names.insert(name.to_ascii_lowercase()) {
                 result.skipped_existing_names.push(name);
                 continue;
+            }
+            if let Some(alias) = jump_alias.as_deref() {
+                let jump_id = alias_ids
+                    .get(&alias.to_ascii_lowercase())
+                    .cloned()
+                    .ok_or_else(|| {
+                        format!("ProxyJump 主机“{alias}”未导入，也没有同名连接配置；为避免直连，已取消导入。")
+                    })?;
+                profile.jump_profile_id = Some(jump_id);
             }
             profile.name = name.clone();
             profile.group_name = "SSH Config".to_owned();
@@ -1162,7 +1210,7 @@ impl ConnectionProfilesStore {
             .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?;
         let mut statement = connection
             .prepare(
-                "SELECT id, profile_id, display_name, bind_host, bind_port, target_host,
+                "SELECT id, profile_id, display_name, group_name, bind_host, bind_port, target_host,
                         target_port, created_at, updated_at
                  FROM ssh_port_forward_rules
                  WHERE (?1 IS NULL OR profile_id = ?1)
@@ -1175,12 +1223,13 @@ impl ConnectionProfilesStore {
                     id: row.get(0)?,
                     profile_id: row.get(1)?,
                     name: row.get(2)?,
-                    local_host: row.get(3)?,
-                    local_port: u32::try_from(row.get::<_, i64>(4)?).unwrap_or(0),
-                    target_host: row.get(5)?,
-                    target_port: u32::try_from(row.get::<_, i64>(6)?).unwrap_or(0),
-                    created_at: row.get(7)?,
-                    updated_at: row.get(8)?,
+                    group_name: row.get(3)?,
+                    local_host: row.get(4)?,
+                    local_port: u32::try_from(row.get::<_, i64>(5)?).unwrap_or(0),
+                    target_host: row.get(6)?,
+                    target_port: u32::try_from(row.get::<_, i64>(7)?).unwrap_or(0),
+                    created_at: row.get(8)?,
+                    updated_at: row.get(9)?,
                 })
             })
             .map_err(database_error)?;
@@ -1196,6 +1245,27 @@ impl ConnectionProfilesStore {
             .lock()
             .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?;
         let transaction = connection.transaction().map_err(database_error)?;
+        let socks5_conflict: bool = transaction
+            .query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM ssh_socks5_rules
+                    WHERE profile_id = ?1 AND bind_host = ?2 AND bind_port = ?3 AND id != ?4
+                 )",
+                params![
+                    rule.profile_id,
+                    rule.local_host,
+                    i64::from(rule.local_port),
+                    rule.id
+                ],
+                |row| row.get(0),
+            )
+            .map_err(database_error)?;
+        if socks5_conflict {
+            return Err(
+                "UNIQUE constraint failed: ssh_socks5_rules.profile_id, ssh_socks5_rules.bind_host, ssh_socks5_rules.bind_port"
+                    .to_owned(),
+            );
+        }
         let created_at: Option<i64> = transaction
             .query_row(
                 "SELECT created_at FROM ssh_port_forward_rules WHERE id = ?1",
@@ -1208,12 +1278,13 @@ impl ConnectionProfilesStore {
         transaction
             .execute(
                 "INSERT INTO ssh_port_forward_rules(
-                    id, profile_id, display_name, bind_host, bind_port, target_host,
+                    id, profile_id, display_name, group_name, bind_host, bind_port, target_host,
                     target_port, created_at, updated_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                  ON CONFLICT(id) DO UPDATE SET
                     profile_id = excluded.profile_id,
                     display_name = excluded.display_name,
+                    group_name = excluded.group_name,
                     bind_host = excluded.bind_host,
                     bind_port = excluded.bind_port,
                     target_host = excluded.target_host,
@@ -1223,6 +1294,7 @@ impl ConnectionProfilesStore {
                     rule.id,
                     rule.profile_id,
                     rule.name,
+                    rule.group_name,
                     rule.local_host,
                     i64::from(rule.local_port),
                     rule.target_host,
@@ -1243,6 +1315,223 @@ impl ConnectionProfilesStore {
                 "DELETE FROM ssh_port_forward_rules WHERE id = ?1",
                 [rule_id],
             )
+            .map(|changed| changed > 0)
+            .map_err(database_error)
+    }
+
+    pub fn socks5_rules_list(&self, profile_id: Option<&str>) -> Result<Vec<Socks5Rule>, String> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?;
+        let mut statement = connection
+            .prepare(
+                "SELECT id, profile_id, display_name, group_name, bind_host, bind_port, created_at, updated_at
+                 FROM ssh_socks5_rules
+                 WHERE (?1 IS NULL OR profile_id = ?1)
+                 ORDER BY profile_id, display_name COLLATE NOCASE, created_at, id",
+            )
+            .map_err(database_error)?;
+        let rows = statement
+            .query_map([profile_id], |row| {
+                Ok(Socks5Rule {
+                    id: row.get(0)?,
+                    profile_id: row.get(1)?,
+                    name: row.get(2)?,
+                    group_name: row.get(3)?,
+                    local_host: row.get(4)?,
+                    local_port: u32::try_from(row.get::<_, i64>(5)?).unwrap_or(0),
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            })
+            .map_err(database_error)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(database_error)
+    }
+
+    pub fn socks5_rule_save(&self, rule: &Socks5Rule) -> Result<(), String> {
+        let mut rule = rule.clone();
+        rule.validate_and_normalize()
+            .map_err(|error| error.message)?;
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?;
+        let transaction = connection.transaction().map_err(database_error)?;
+        let forward_conflict: bool = transaction
+            .query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM ssh_port_forward_rules
+                    WHERE profile_id = ?1 AND bind_host = ?2 AND bind_port = ?3 AND id != ?4
+                 )",
+                params![
+                    rule.profile_id,
+                    rule.local_host,
+                    i64::from(rule.local_port),
+                    rule.id
+                ],
+                |row| row.get(0),
+            )
+            .map_err(database_error)?;
+        if forward_conflict {
+            return Err(
+                "UNIQUE constraint failed: ssh_port_forward_rules.profile_id, ssh_port_forward_rules.bind_host, ssh_port_forward_rules.bind_port"
+                    .to_owned(),
+            );
+        }
+        let created_at: Option<i64> = transaction
+            .query_row(
+                "SELECT created_at FROM ssh_socks5_rules WHERE id = ?1",
+                [&rule.id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(database_error)?;
+        let created_at = created_at.unwrap_or(rule.created_at);
+        transaction
+            .execute(
+                "INSERT INTO ssh_socks5_rules(
+                    id, profile_id, display_name, group_name, bind_host, bind_port, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                 ON CONFLICT(id) DO UPDATE SET
+                    profile_id = excluded.profile_id,
+                    display_name = excluded.display_name,
+                    group_name = excluded.group_name,
+                    bind_host = excluded.bind_host,
+                    bind_port = excluded.bind_port,
+                    updated_at = excluded.updated_at",
+                params![
+                    rule.id,
+                    rule.profile_id,
+                    rule.name,
+                    rule.group_name,
+                    rule.local_host,
+                    i64::from(rule.local_port),
+                    created_at,
+                    rule.updated_at,
+                ],
+            )
+            .map_err(database_error)?;
+        transaction.commit().map_err(database_error)
+    }
+
+    pub fn import_tunnel_rules(
+        &self,
+        profile_id: &str,
+        forwards: &[ForwardRule],
+        socks5_rules: &[Socks5Rule],
+    ) -> Result<TunnelRulesImportResult, String> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?;
+        let transaction = connection.transaction().map_err(database_error)?;
+        let profile_exists: bool = transaction
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM connection_profiles WHERE id = ?1)",
+                [profile_id],
+                |row| row.get(0),
+            )
+            .map_err(database_error)?;
+        if !profile_exists {
+            return Err("绑定的服务器配置已不存在，请重新选择服务器。".to_owned());
+        }
+
+        let mut used_ports = std::collections::HashSet::new();
+        {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT bind_port FROM ssh_port_forward_rules WHERE profile_id = ?1
+                     UNION SELECT bind_port FROM ssh_socks5_rules WHERE profile_id = ?1",
+                )
+                .map_err(database_error)?;
+            let ports = statement
+                .query_map([profile_id], |row| row.get::<_, u32>(0))
+                .map_err(database_error)?;
+            for port in ports {
+                used_ports.insert(port.map_err(database_error)?);
+            }
+        }
+
+        let mut result = TunnelRulesImportResult {
+            imported: 0,
+            skipped: 0,
+        };
+        for source in forwards {
+            if source.profile_id != profile_id {
+                return Err("SSH Config 转发目标与当前服务器配置不一致。".to_owned());
+            }
+            let mut rule = source.clone();
+            rule.id = Uuid::new_v4().to_string();
+            rule.validate_and_normalize()
+                .map_err(|error| error.message)?;
+            if !used_ports.insert(rule.local_port) {
+                result.skipped += 1;
+                continue;
+            }
+            transaction
+                .execute(
+                    "INSERT INTO ssh_port_forward_rules(
+                        id, profile_id, display_name, group_name, bind_host, bind_port,
+                        target_host, target_port, created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    params![
+                        rule.id,
+                        rule.profile_id,
+                        rule.name,
+                        rule.group_name,
+                        rule.local_host,
+                        i64::from(rule.local_port),
+                        rule.target_host,
+                        i64::from(rule.target_port),
+                        rule.created_at,
+                        rule.updated_at,
+                    ],
+                )
+                .map_err(database_error)?;
+            result.imported += 1;
+        }
+        for source in socks5_rules {
+            if source.profile_id != profile_id {
+                return Err("SSH Config 转发目标与当前服务器配置不一致。".to_owned());
+            }
+            let mut rule = source.clone();
+            rule.id = Uuid::new_v4().to_string();
+            rule.validate_and_normalize()
+                .map_err(|error| error.message)?;
+            if !used_ports.insert(rule.local_port) {
+                result.skipped += 1;
+                continue;
+            }
+            transaction
+                .execute(
+                    "INSERT INTO ssh_socks5_rules(
+                        id, profile_id, display_name, group_name, bind_host, bind_port,
+                        created_at, updated_at
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    params![
+                        rule.id,
+                        rule.profile_id,
+                        rule.name,
+                        rule.group_name,
+                        rule.local_host,
+                        i64::from(rule.local_port),
+                        rule.created_at,
+                        rule.updated_at,
+                    ],
+                )
+                .map_err(database_error)?;
+            result.imported += 1;
+        }
+        transaction.commit().map_err(database_error)?;
+        Ok(result)
+    }
+
+    pub fn socks5_rule_delete(&self, rule_id: &str) -> Result<bool, String> {
+        self.connection
+            .lock()
+            .map_err(|_| "连接配置数据库锁已损坏。".to_owned())?
+            .execute("DELETE FROM ssh_socks5_rules WHERE id = ?1", [rule_id])
             .map(|changed| changed > 0)
             .map_err(database_error)
     }
@@ -1311,6 +1600,7 @@ impl ConnectionProfilesStore {
 }
 
 fn upsert(connection: &Connection, profile: &ConnectionProfile) -> Result<(), String> {
+    validate_profile_jump(connection, profile)?;
     let group_id = match profile.group_id.as_deref() {
         Some(group_id) if group_exists(connection, group_id)? => group_id.to_owned(),
         Some(_) => return Err("连接配置引用的分组不存在。".to_owned()),
@@ -1323,8 +1613,8 @@ fn upsert(connection: &Connection, profile: &ConnectionProfile) -> Result<(), St
             "INSERT INTO connection_profiles (
                 id, name, host, port, username, group_name, auth_method, private_key_path,
                 environment, is_favorite, last_connected_at, auto_reconnect, credential_accounts,
-                group_id, sort_order, key_ref
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+                group_id, sort_order, key_ref, jump_profile_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
              ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 host = excluded.host,
@@ -1340,7 +1630,8 @@ fn upsert(connection: &Connection, profile: &ConnectionProfile) -> Result<(), St
                 credential_accounts = excluded.credential_accounts,
                 group_id = excluded.group_id,
                 sort_order = excluded.sort_order,
-                key_ref = excluded.key_ref",
+                key_ref = excluded.key_ref,
+                jump_profile_id = excluded.jump_profile_id",
             params![
                 profile.id,
                 profile.name,
@@ -1358,10 +1649,48 @@ fn upsert(connection: &Connection, profile: &ConnectionProfile) -> Result<(), St
                 group_id,
                 profile.sort_order,
                 profile.key_ref,
+                profile.jump_profile_id,
             ],
         )
         .map(|_| ())
         .map_err(database_error)
+}
+
+fn validate_profile_jump(
+    connection: &Connection,
+    profile: &ConnectionProfile,
+) -> Result<(), String> {
+    if profile.jump_profile_id.is_some() {
+        let is_used_as_jump: bool = connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM connection_profiles WHERE jump_profile_id = ?1)",
+                [&profile.id],
+                |row| row.get(0),
+            )
+            .map_err(database_error)?;
+        if is_used_as_jump {
+            return Err("此连接已被其他配置用作跳板机，不能再配置第二跳。".to_owned());
+        }
+    }
+    let Some(jump_profile_id) = profile.jump_profile_id.as_deref() else {
+        return Ok(());
+    };
+    if jump_profile_id == profile.id {
+        return Err("连接配置不能将自身设为跳板机。".to_owned());
+    }
+    let jump_profile = connection
+        .query_row(
+            "SELECT id, jump_profile_id FROM connection_profiles WHERE id = ?1",
+            [jump_profile_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+        )
+        .optional()
+        .map_err(database_error)?
+        .ok_or_else(|| "所选跳板机连接配置不存在。".to_owned())?;
+    if jump_profile.0 == profile.id || jump_profile.1.is_some() {
+        return Err("当前仅支持单跳 ProxyJump；跳板机本身不能再配置跳板。".to_owned());
+    }
+    Ok(())
 }
 
 fn normalize_profile_order(
@@ -1407,7 +1736,7 @@ fn list_from(connection: &Connection) -> Result<Vec<ConnectionProfile>, String> 
         .prepare(
             "SELECT id, name, host, port, username, group_name, auth_method, private_key_path,
                     environment, is_favorite, last_connected_at, auto_reconnect, credential_accounts,
-                    group_id, sort_order, key_ref
+                    group_id, sort_order, key_ref, jump_profile_id
              FROM connection_profiles
              ORDER BY is_favorite DESC, last_connected_at DESC, name COLLATE NOCASE ASC",
         )
@@ -1434,6 +1763,7 @@ fn list_from(connection: &Connection) -> Result<Vec<ConnectionProfile>, String> 
                 group_id: row.get(13)?,
                 sort_order: row.get(14)?,
                 key_ref: row.get(15)?,
+                jump_profile_id: row.get(16)?,
             })
         })
         .map_err(database_error)?;
@@ -1707,6 +2037,80 @@ fn migrate_phase4b_tunnels(connection: &mut Connection) -> Result<(), String> {
     transaction.commit().map_err(database_error)
 }
 
+fn migrate_phase4d_socks5(connection: &mut Connection) -> Result<(), String> {
+    if migration_applied(connection, "phase4d_socks5_v1")? {
+        return Ok(());
+    }
+    let transaction = connection.transaction().map_err(database_error)?;
+    transaction
+        .execute_batch(
+            "CREATE TABLE IF NOT EXISTS ssh_socks5_rules (
+                id TEXT PRIMARY KEY NOT NULL,
+                profile_id TEXT NOT NULL REFERENCES connection_profiles(id) ON DELETE CASCADE,
+                display_name TEXT NOT NULL CHECK (length(trim(display_name)) BETWEEN 1 AND 64),
+                bind_host TEXT NOT NULL CHECK (bind_host = '127.0.0.1'),
+                bind_port INTEGER NOT NULL CHECK (bind_port BETWEEN 1 AND 65535),
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                UNIQUE(profile_id, bind_host, bind_port)
+             );
+             CREATE INDEX IF NOT EXISTS idx_ssh_socks5_rules_profile
+                ON ssh_socks5_rules(profile_id, display_name COLLATE NOCASE, created_at);
+             INSERT INTO app_migrations(name, applied_at)
+                VALUES ('phase4d_socks5_v1', CAST(strftime('%s','now') AS INTEGER) * 1000);",
+        )
+        .map_err(database_error)?;
+    transaction.commit().map_err(database_error)
+}
+
+fn migrate_phase4d_tunnel_groups(connection: &mut Connection) -> Result<(), String> {
+    let already_applied = migration_applied(connection, "phase4d_tunnel_groups_v1")?;
+    let transaction = connection.transaction().map_err(database_error)?;
+    ensure_column(
+        &transaction,
+        "ssh_port_forward_rules",
+        "group_name",
+        "ALTER TABLE ssh_port_forward_rules ADD COLUMN group_name TEXT NOT NULL DEFAULT ''",
+    )?;
+    ensure_column(
+        &transaction,
+        "ssh_socks5_rules",
+        "group_name",
+        "ALTER TABLE ssh_socks5_rules ADD COLUMN group_name TEXT NOT NULL DEFAULT ''",
+    )?;
+    if !already_applied {
+        transaction
+            .execute(
+                "INSERT INTO app_migrations(name, applied_at) VALUES ('phase4d_tunnel_groups_v1', ?1)",
+                [unix_time_millis()],
+            )
+            .map_err(database_error)?;
+    }
+    transaction.commit().map_err(database_error)
+}
+
+fn migrate_phase4d_proxyjump(connection: &mut Connection) -> Result<(), String> {
+    if migration_applied(connection, "phase4d_proxyjump_v1")? {
+        return Ok(());
+    }
+    let transaction = connection.transaction().map_err(database_error)?;
+    ensure_column(
+        &transaction,
+        "connection_profiles",
+        "jump_profile_id",
+        "ALTER TABLE connection_profiles ADD COLUMN jump_profile_id TEXT REFERENCES connection_profiles(id) ON DELETE RESTRICT",
+    )?;
+    transaction
+        .execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_connection_profiles_jump
+                ON connection_profiles(jump_profile_id);
+             INSERT INTO app_migrations(name, applied_at)
+                VALUES ('phase4d_proxyjump_v1', CAST(strftime('%s','now') AS INTEGER) * 1000);",
+        )
+        .map_err(database_error)?;
+    transaction.commit().map_err(database_error)
+}
+
 fn reserve_rotation_nonce(
     transaction: &Transaction<'_>,
     key_id: &str,
@@ -1909,7 +2313,7 @@ fn backup_database_before_phase4a_migration(
     Ok(())
 }
 
-fn backup_database_before_phase4b_migration(
+fn backup_database_before_phase4d_migration(
     connection: &Connection,
     database_path: &Path,
 ) -> Result<(), String> {
@@ -1920,7 +2324,7 @@ fn backup_database_before_phase4b_migration(
         .parent()
         .ok_or_else(|| "无法确定连接数据库所在目录，已停止迁移。".to_owned())?;
     let backup_path = parent.join(format!(
-        "connections.sqlite3.phase4b-{}-{}.bak",
+        "connections.sqlite3.phase4d-{}-{}.bak",
         unix_time_millis(),
         Uuid::new_v4()
     ));
@@ -1928,7 +2332,7 @@ fn backup_database_before_phase4b_migration(
     if let Err(error) = connection.execute("VACUUM INTO ?1", [&backup_path_text]) {
         let _ = std::fs::remove_file(&backup_path);
         return Err(format!(
-            "无法创建 Phase 4B 数据迁移备份，原数据库未修改：{}",
+            "无法创建 Phase 4D SOCKS5 数据迁移备份，原数据库未修改：{}",
             database_error(error)
         ));
     }
@@ -1939,7 +2343,7 @@ fn backup_database_before_phase4b_migration(
     ) {
         let _ = std::fs::remove_file(&backup_path);
         return Err(format!(
-            "无法保护 Phase 4B 数据迁移备份的文件权限，原数据库未修改：{error}"
+            "无法保护 Phase 4D SOCKS5 数据迁移备份的文件权限，原数据库未修改：{error}"
         ));
     }
     Ok(())
@@ -1966,6 +2370,7 @@ mod tests {
             auth_method: "password".to_owned(),
             private_key_path: String::new(),
             key_ref: None,
+            jump_profile_id: None,
             environment: "test".to_owned(),
             favorite: false,
             last_connected_at: None,
@@ -2009,10 +2414,24 @@ mod tests {
             id: id.to_owned(),
             profile_id: profile_id.to_owned(),
             name: format!("规则 {id}"),
+            group_name: String::new(),
             local_host: "127.0.0.1".to_owned(),
             local_port: port,
             target_host: "db.example.invalid".to_owned(),
             target_port: 3306,
+            created_at: 100,
+            updated_at: 100,
+        }
+    }
+
+    fn socks5_rule(id: &str, profile_id: &str, port: u32) -> Socks5Rule {
+        Socks5Rule {
+            id: id.to_owned(),
+            profile_id: profile_id.to_owned(),
+            name: format!("SOCKS5 {id}"),
+            group_name: String::new(),
+            local_host: "127.0.0.1".to_owned(),
+            local_port: port,
             created_at: 100,
             updated_at: 100,
         }
@@ -2047,6 +2466,71 @@ mod tests {
         assert!(store.delete("host-one").unwrap());
         assert_eq!(store.forward_rules_list(Some("host-one")).unwrap(), []);
         assert_eq!(store.forward_rules_list(Some("host-two")).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn imported_tunnel_rules_keep_groups_and_skip_conflicting_ports_atomically() {
+        let store = memory_store();
+        store.save(&profile("host-one")).unwrap();
+        store
+            .forward_rule_save(&forward_rule("existing", "host-one", 18_080))
+            .unwrap();
+
+        let mut conflicting = forward_rule("candidate-conflict", "host-one", 18_080);
+        conflicting.group_name = "Imported".to_owned();
+        let mut socks = socks5_rule("candidate-socks", "host-one", 18_081);
+        socks.group_name = "Imported".to_owned();
+        let result = store
+            .import_tunnel_rules("host-one", &[conflicting], &[socks])
+            .unwrap();
+
+        assert_eq!(result.imported, 1);
+        assert_eq!(result.skipped, 1);
+        let imported = &store.socks5_rules_list(Some("host-one")).unwrap()[0];
+        assert_eq!(imported.group_name, "Imported");
+        assert_eq!(imported.local_port, 18_081);
+    }
+
+    #[test]
+    fn socks5_rules_round_trip_and_do_not_replace_legacy_forward_rules() {
+        let store = memory_store();
+        store.save(&profile("host-one")).unwrap();
+        store.save(&profile("host-two")).unwrap();
+        let legacy = forward_rule("legacy-forward", "host-one", 18_080);
+        store.forward_rule_save(&legacy).unwrap();
+
+        let socks = socks5_rule("socks-one", "host-one", 18_081);
+        store.socks5_rule_save(&socks).unwrap();
+        assert_eq!(
+            store.socks5_rules_list(Some("host-one")).unwrap(),
+            std::slice::from_ref(&socks)
+        );
+        assert_eq!(store.socks5_rules_list(Some("host-two")).unwrap(), []);
+        assert_eq!(
+            store.forward_rules_list(Some("host-one")).unwrap(),
+            std::slice::from_ref(&legacy)
+        );
+
+        assert!(
+            store
+                .socks5_rule_save(&socks5_rule("socks-conflict", "host-one", 18_080))
+                .unwrap_err()
+                .contains("UNIQUE constraint failed")
+        );
+        assert!(
+            store
+                .forward_rule_save(&forward_rule("forward-conflict", "host-one", 18_081))
+                .unwrap_err()
+                .contains("UNIQUE constraint failed")
+        );
+
+        store
+            .socks5_rule_save(&socks5_rule("socks-two", "host-two", 18_081))
+            .unwrap();
+        assert!(store.delete("host-one").unwrap());
+        assert_eq!(store.socks5_rules_list(Some("host-one")).unwrap(), []);
+        assert_eq!(store.socks5_rules_list(Some("host-two")).unwrap().len(), 1);
+        assert_eq!(store.forward_rules_list(Some("host-two")).unwrap(), []);
     }
 
     #[test]
@@ -2113,6 +2597,53 @@ mod tests {
             1
         );
         drop(reopened);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn socks5_migration_keeps_existing_forward_rules_and_creates_private_backup() {
+        let directory =
+            std::env::temp_dir().join(format!("termvista-socks5-migration-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let database_path = directory.join("connections.sqlite3");
+        let legacy_rule = forward_rule("legacy-forward", "legacy-host", 18_080);
+        {
+            let store = ConnectionProfilesStore::open(&database_path).unwrap();
+            store.save(&profile("legacy-host")).unwrap();
+            store.forward_rule_save(&legacy_rule).unwrap();
+        }
+        {
+            let connection = Connection::open(&database_path).unwrap();
+            connection
+                .execute_batch(
+                    "DROP TABLE ssh_socks5_rules;
+                     DELETE FROM app_migrations WHERE name = 'phase4d_socks5_v1';
+                     PRAGMA user_version = 4;",
+                )
+                .unwrap();
+        }
+
+        let migrated = ConnectionProfilesStore::open(&database_path).unwrap();
+        assert_eq!(migrated.forward_rules_list(None).unwrap(), [legacy_rule]);
+        assert_eq!(migrated.socks5_rules_list(None).unwrap(), []);
+        drop(migrated);
+        let backups = std::fs::read_dir(&directory)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry.file_name().to_string_lossy().contains("phase4d-")
+                    && entry.file_name().to_string_lossy().ends_with(".bak")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(backups.len(), 1);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                backups[0].metadata().unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
         std::fs::remove_dir_all(directory).unwrap();
     }
 
@@ -2326,6 +2857,7 @@ mod tests {
             auth_method: "password".to_owned(),
             private_key_path: String::new(),
             key_ref: None,
+            jump_profile_id: None,
             environment: "development".to_owned(),
             favorite: false,
             last_connected_at: None,
@@ -2333,12 +2865,88 @@ mod tests {
             credential_accounts: Vec::new(),
         };
 
-        let result = store.import_ssh_config_profiles(vec![incoming]).unwrap();
+        let result = store
+            .import_ssh_config_profiles(vec![(incoming, None)])
+            .unwrap();
         assert!(result.imported.is_empty());
         assert_eq!(result.skipped_existing_names, ["build-server"]);
         let stored = store.list().unwrap();
         assert_eq!(stored.len(), 1);
         assert_eq!(stored[0], existing_stored);
+    }
+
+    #[test]
+    fn proxyjump_profiles_persist_as_single_hop_and_cannot_be_deleted_or_nested() {
+        let store = memory_store();
+        let jump = profile("jump-profile");
+        let jump_id = jump.id.clone();
+        store.save(&jump).unwrap();
+        let mut target = profile("target-profile");
+        target.jump_profile_id = Some(jump_id.clone());
+        store.save(&target).unwrap();
+        assert_eq!(
+            store
+                .list()
+                .unwrap()
+                .into_iter()
+                .find(|item| item.id == target.id)
+                .unwrap()
+                .jump_profile_id
+                .as_deref(),
+            Some(jump_id.as_str())
+        );
+
+        let alternate_jump = profile("alternate-jump");
+        store.save(&alternate_jump).unwrap();
+        let mut nested_jump = jump.clone();
+        nested_jump.jump_profile_id = Some(alternate_jump.id);
+        assert!(store.save(&nested_jump).unwrap_err().contains("第二跳"));
+
+        let mut nested = profile("nested-profile");
+        nested.jump_profile_id = Some(target.id.clone());
+        assert!(store.save(&nested).unwrap_err().contains("单跳"));
+        assert!(store.delete(&jump_id).is_err());
+        assert!(store.delete(&target.id).unwrap());
+        assert!(store.delete(&jump_id).unwrap());
+    }
+
+    #[test]
+    fn ssh_config_proxyjump_alias_links_imported_profiles_without_direct_fallback() {
+        let store = memory_store();
+        let jump = profile("gateway-id");
+        let mut jump = jump;
+        jump.name = "gateway".to_owned();
+        let mut target = profile("app-id");
+        target.name = "app".to_owned();
+        let result = store
+            .import_ssh_config_profiles(vec![(target, Some("gateway".to_owned())), (jump, None)])
+            .unwrap();
+        assert_eq!(result.imported, ["gateway", "app"]);
+        let profiles = store.list().unwrap();
+        let jump_id = profiles
+            .iter()
+            .find(|item| item.name == "gateway")
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(
+            profiles
+                .iter()
+                .find(|item| item.name == "app")
+                .unwrap()
+                .jump_profile_id
+                .as_deref(),
+            Some(jump_id.as_str())
+        );
+
+        let mut missing_jump_target = profile("orphan-target");
+        missing_jump_target.name = "orphan".to_owned();
+        assert!(
+            store
+                .import_ssh_config_profiles(vec![(missing_jump_target, Some("missing".to_owned()))])
+                .unwrap_err()
+                .contains("为避免直连")
+        );
     }
 
     #[test]

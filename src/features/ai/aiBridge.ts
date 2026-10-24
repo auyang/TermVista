@@ -51,3 +51,7 @@ export function cancelAiChat(requestId: string) {
 export function clearAiConversation(sessionId: string) {
   return invoke<void>("ai_conversation_clear", { sessionId });
 }
+
+export function saveAiTunnelSuggestion(proposalToken: string, confirmed: boolean) {
+  return runWithUpdateMaintenanceTask("tunnelSave", () => invoke<unknown>("ai_tunnel_suggestion_save", { proposalToken, confirmed }));
+}

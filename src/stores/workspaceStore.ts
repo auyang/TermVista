@@ -24,6 +24,7 @@ export type ConnectionProfile = {
   authMethod: AuthMethod;
   privateKeyPath: string;
   keyRef?: string;
+  jumpProfileId?: string;
   environment: ServerEnvironment;
   favorite: boolean;
   lastConnectedAt?: number;

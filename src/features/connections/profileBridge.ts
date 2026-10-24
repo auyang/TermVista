@@ -9,6 +9,8 @@ export type SshConfigPreviewEntry = {
   identityFile: string | null;
   identitiesOnly: boolean | null;
   proxyJump: string | null;
+  localForwards: { bindHost: string; bindPort: number; targetHost: string; targetPort: number }[];
+  dynamicForwards: { bindHost: string; bindPort: number }[];
   importable: boolean;
   warnings: string[];
 };
@@ -98,6 +100,10 @@ export async function previewSshConfig(path: string) {
 
 export async function importSshConfig(path: string, aliases: string[]) {
   return invoke<SshConfigImportResult>("ssh_config_import", { path, aliases });
+}
+
+export async function importSshConfigTunnelRules(path: string, alias: string, profileId: string) {
+  return invoke<{ imported: number; skipped: number }>("ssh_config_import_tunnel_rules", { path, alias, profileId });
 }
 
 export function isNativeProfileStore() {

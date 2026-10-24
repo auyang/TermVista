@@ -42,7 +42,7 @@ use tauri::{
     Emitter, Manager, State, WindowEvent,
     ipc::{Channel, InvokeResponseBody},
 };
-use tunnels::{ForwardRule, ForwardRuntime, TunnelManager};
+use tunnels::{ForwardRule, ForwardRuntime, Socks5Rule, Socks5Runtime, TunnelManager};
 
 pub mod ai;
 pub mod connections;
@@ -220,6 +220,194 @@ async fn tunnel_status_list(
 }
 
 #[tauri::command]
+async fn tunnel_event_history(
+    tunnels: State<'_, Arc<TunnelManager>>,
+) -> Result<Vec<tunnels::models::TunnelEvent>, String> {
+    Ok(tunnels.event_history().await)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn tunnel_check_target(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
+    sessions: State<'_, Arc<SessionManager>>,
+    rule_id: String,
+    session_id: String,
+) -> Result<tunnels::models::TcpCheckResult, tunnels::models::TunnelError> {
+    let rules = profiles.forward_rules_list(None).map_err(|_| {
+        tunnels::models::TunnelError::new(
+            tunnels::models::TunnelErrorCode::Internal,
+            "无法读取 TCP 转发规则。",
+        )
+    })?;
+    let rule = rules
+        .into_iter()
+        .find(|rule| rule.id == rule_id)
+        .ok_or_else(|| {
+            tunnels::models::TunnelError::new(
+                tunnels::models::TunnelErrorCode::InvalidRule,
+                "找不到 TCP 转发规则。",
+            )
+        })?;
+    tunnels
+        .check_tcp_target(&rule, &session_id, sessions.inner().clone())
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn ssh_config_import_tunnel_rules(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    path: String,
+    alias: String,
+    profile_id: String,
+) -> Result<connections::TunnelRulesImportResult, String> {
+    let profiles = profiles.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let preview = ssh::config::preview(&PathBuf::from(path))?;
+        let entry = preview
+            .entries
+            .into_iter()
+            .find(|entry| entry.alias.eq_ignore_ascii_case(&alias))
+            .ok_or_else(|| "找不到所选 SSH Config 主机项。".to_owned())?;
+        let now = tunnels::models::now_millis();
+        let group_name = entry.alias.chars().take(64).collect::<String>();
+        let forwards = entry
+            .local_forwards
+            .into_iter()
+            .map(|forward| ForwardRule {
+                id: uuid::Uuid::new_v4().to_string(),
+                profile_id: profile_id.clone(),
+                name: format!("{} · {}", entry.alias, forward.bind_port)
+                    .chars()
+                    .take(64)
+                    .collect(),
+                group_name: group_name.clone(),
+                local_host: forward.bind_host,
+                local_port: u32::from(forward.bind_port),
+                target_host: forward.target_host,
+                target_port: u32::from(forward.target_port),
+                created_at: now,
+                updated_at: now,
+            })
+            .collect::<Vec<_>>();
+        let socks5 = entry
+            .dynamic_forwards
+            .into_iter()
+            .map(|forward| Socks5Rule {
+                id: uuid::Uuid::new_v4().to_string(),
+                profile_id: profile_id.clone(),
+                name: format!("{} · SOCKS5 {}", entry.alias, forward.bind_port)
+                    .chars()
+                    .take(64)
+                    .collect(),
+                group_name: group_name.clone(),
+                local_host: forward.bind_host,
+                local_port: u32::from(forward.bind_port),
+                created_at: now,
+                updated_at: now,
+            })
+            .collect::<Vec<_>>();
+        profiles.import_tunnel_rules(&profile_id, &forwards, &socks5)
+    })
+    .await
+    .map_err(|_| "SSH Config 隧道导入任务失败。".to_owned())?
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn socks5_rules_list(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    profile_id: Option<String>,
+) -> Result<Vec<Socks5Rule>, String> {
+    profiles.socks5_rules_list(profile_id.as_deref())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn socks5_rule_save(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
+    mut rule: Socks5Rule,
+) -> Result<Socks5Rule, String> {
+    let rule_id = rule.id.clone();
+    tunnels
+        .with_socks5_rule_stopped(&rule_id, || {
+            rule.validate_and_normalize()
+                .map_err(|error| error.message)?;
+            rule.updated_at = tunnels::models::now_millis();
+            profiles.socks5_rule_save(&rule).map_err(|error| {
+                if error.contains("UNIQUE constraint failed") {
+                    "此服务器已经有规则使用了该本地端口。".to_owned()
+                } else if error.contains("FOREIGN KEY constraint failed") {
+                    "绑定的服务器配置已不存在，请重新选择服务器。".to_owned()
+                } else {
+                    error
+                }
+            })?;
+            Ok(rule)
+        })
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn socks5_rule_delete(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
+    rule_id: String,
+) -> Result<bool, String> {
+    tunnels
+        .delete_socks5_rule_if_stopped(&rule_id, || profiles.socks5_rule_delete(&rule_id))
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn socks5_start(
+    profiles: State<'_, Arc<ConnectionProfilesStore>>,
+    tunnels: State<'_, Arc<TunnelManager>>,
+    sessions: State<'_, Arc<SessionManager>>,
+    rule_id: String,
+    session_id: String,
+) -> Result<Socks5Runtime, tunnels::models::TunnelError> {
+    tunnels
+        .start_socks5_loaded(
+            || {
+                profiles
+                    .socks5_rules_list(None)
+                    .map_err(|_| {
+                        tunnels::models::TunnelError::new(
+                            tunnels::models::TunnelErrorCode::Internal,
+                            "无法读取 SOCKS5 规则。",
+                        )
+                    })?
+                    .into_iter()
+                    .find(|rule| rule.id == rule_id)
+                    .ok_or_else(|| {
+                        tunnels::models::TunnelError::new(
+                            tunnels::models::TunnelErrorCode::InvalidRule,
+                            "找不到 SOCKS5 规则。",
+                        )
+                    })
+            },
+            &session_id,
+            sessions.inner().clone(),
+        )
+        .await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn socks5_stop(
+    tunnels: State<'_, Arc<TunnelManager>>,
+    rule_id: String,
+) -> Result<Socks5Runtime, tunnels::models::TunnelError> {
+    tunnels.stop_socks5(&rule_id).await
+}
+
+#[tauri::command]
+async fn socks5_status_list(
+    tunnels: State<'_, Arc<TunnelManager>>,
+) -> Result<Vec<Socks5Runtime>, String> {
+    Ok(tunnels.socks5_runtime_list().await)
+}
+
+#[tauri::command]
 fn connection_profiles_clear_recent(
     profiles: State<'_, Arc<ConnectionProfilesStore>>,
 ) -> Result<usize, String> {
@@ -308,27 +496,34 @@ async fn ssh_config_import(
             .filter(|entry| {
                 entry.importable && selected_aliases.contains(&entry.alias.to_ascii_lowercase())
             })
-            .map(|entry| ConnectionProfile {
-                id: uuid::Uuid::new_v4().to_string(),
-                name: entry.alias,
-                host: entry.hostname,
-                port: entry.port,
-                username: entry.username,
-                group_name: "SSH Config".to_owned(),
-                group_id: None,
-                sort_order: 0,
-                auth_method: if entry.identity_file.is_some() {
-                    "privateKey".to_owned()
-                } else {
-                    "password".to_owned()
-                },
-                private_key_path: entry.identity_file.unwrap_or_default(),
-                key_ref: None,
-                environment: "development".to_owned(),
-                favorite: false,
-                last_connected_at: None,
-                auto_reconnect: false,
-                credential_accounts: Vec::new(),
+            .map(|entry| {
+                let jump_alias = entry.proxy_jump.clone();
+                (
+                    ConnectionProfile {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        name: entry.alias,
+                        host: entry.hostname,
+                        port: entry.port,
+                        username: entry.username,
+                        group_name: "SSH Config".to_owned(),
+                        group_id: None,
+                        sort_order: 0,
+                        auth_method: if entry.identity_file.is_some() {
+                            "privateKey".to_owned()
+                        } else {
+                            "password".to_owned()
+                        },
+                        private_key_path: entry.identity_file.unwrap_or_default(),
+                        key_ref: None,
+                        jump_profile_id: None,
+                        environment: "development".to_owned(),
+                        favorite: false,
+                        last_connected_at: None,
+                        auto_reconnect: false,
+                        credential_accounts: Vec::new(),
+                    },
+                    jump_alias,
+                )
             })
             .collect::<Vec<_>>();
         if import_profiles.is_empty() {
@@ -369,6 +564,54 @@ fn credential_key(profile_id: String, username: String, kind: CredentialKind) ->
 
 fn ssh_error(code: SshErrorCode, message: &'static str) -> SshError {
     SshError::new(code, message)
+}
+
+fn configured_jump_route(
+    profiles: &ConnectionProfilesStore,
+    target_profile_id: &str,
+    jump_session_id: Option<String>,
+) -> Result<(Option<String>, Option<String>), SshError> {
+    let stored_profiles = profiles.list().map_err(|_| {
+        ssh_error(
+            SshErrorCode::ConnectionFailed,
+            "无法读取目标服务器连接配置。",
+        )
+    })?;
+    let profile = stored_profiles
+        .iter()
+        .find(|profile| profile.id == target_profile_id)
+        .cloned()
+        .ok_or_else(|| ssh_error(SshErrorCode::ConnectionFailed, "目标服务器连接配置不存在。"))?;
+    match (profile.jump_profile_id, jump_session_id) {
+        (None, None) => Ok((None, None)),
+        (None, Some(_)) => Err(ssh_error(
+            SshErrorCode::JumpHostUnavailable,
+            "目标服务器未配置此跳板机；为避免连接路由混淆，连接已停止。",
+        )),
+        (Some(_), None) => Err(ssh_error(
+            SshErrorCode::JumpHostUnavailable,
+            "目标服务器已配置跳板机，但没有可用的已验证跳板会话；未尝试直连。",
+        )),
+        (Some(jump_profile_id), Some(jump_session_id)) => {
+            let jump_profile = stored_profiles
+                .iter()
+                .find(|profile| profile.id == jump_profile_id)
+                .cloned()
+                .ok_or_else(|| {
+                    ssh_error(
+                        SshErrorCode::JumpHostUnavailable,
+                        "配置的跳板机连接不存在；未尝试直连。",
+                    )
+                })?;
+            if jump_profile.jump_profile_id.is_some() {
+                return Err(ssh_error(
+                    SshErrorCode::JumpHostUnavailable,
+                    "当前只支持单跳 ProxyJump；跳板机本身不能再使用另一台跳板机。",
+                ));
+            }
+            Ok((Some(jump_profile_id), Some(jump_session_id)))
+        }
+    }
 }
 
 fn record_audit(
@@ -451,6 +694,7 @@ async fn ssh_connect(
     host: String,
     port: u16,
     username: String,
+    jump_session_id: Option<String>,
     mut auth: SshAuth,
     remember_credential: bool,
     initial_size: TerminalSize,
@@ -459,6 +703,8 @@ async fn ssh_connect(
     on_host_key: Channel<HostKeyChallenge>,
     on_auth_prompt: Channel<AuthPromptEvent>,
 ) -> Result<SshConnectResult, SshError> {
+    let (jump_profile_id, jump_session_id) =
+        configured_jump_route(profiles.inner(), &profile_id, jump_session_id)?;
     if let SshAuth::PrivateKey {
         key_ref: Some(key_id),
         private_key_data,
@@ -501,6 +747,8 @@ async fn ssh_connect(
             port,
             username,
             auth,
+            jump_profile_id,
+            jump_session_id,
             initial_size,
         },
         on_data,
@@ -589,6 +837,7 @@ async fn ssh_connect_saved(
     host: String,
     port: u16,
     username: String,
+    jump_session_id: Option<String>,
     auth_method: String,
     private_key_path: Option<String>,
     key_ref: Option<String>,
@@ -598,6 +847,8 @@ async fn ssh_connect_saved(
     on_host_key: Channel<HostKeyChallenge>,
     on_auth_prompt: Channel<AuthPromptEvent>,
 ) -> Result<SshConnectResult, SshError> {
+    let (jump_profile_id, jump_session_id) =
+        configured_jump_route(profiles.inner(), &profile_id, jump_session_id)?;
     let auth = match auth_method.as_str() {
         "privateKey" => {
             let key_ref = key_ref.filter(|key_ref| !key_ref.trim().is_empty());
@@ -690,6 +941,8 @@ async fn ssh_connect_saved(
             port,
             username,
             auth,
+            jump_profile_id,
+            jump_session_id,
             initial_size,
         },
         on_data,
@@ -1271,6 +1524,17 @@ async fn ai_conversation_clear(
 ) -> Result<(), ai::AiError> {
     state.conversation_clear(&session_id).await;
     Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn ai_tunnel_suggestion_save(
+    state: State<'_, Arc<AiRuntime>>,
+    proposal_token: String,
+    confirmed: bool,
+) -> Result<serde_json::Value, ai::AiError> {
+    state
+        .tunnel_suggestion_save(&proposal_token, confirmed)
+        .await
 }
 
 #[tauri::command]
@@ -1912,9 +2176,15 @@ pub fn run() {
                 Arc::clone(&host_keys),
             ));
             let tunnel_app = app.handle().clone();
-            let tunnels = Arc::new(TunnelManager::new(move |runtime| {
-                let _ = tunnel_app.emit("tunnel-runtime", runtime);
-            }));
+            let socks5_app = app.handle().clone();
+            let tunnels = Arc::new(TunnelManager::new_with_socks5(
+                move |runtime| {
+                    let _ = tunnel_app.emit("tunnel-runtime", runtime);
+                },
+                move |runtime| {
+                    let _ = socks5_app.emit("socks5-runtime", runtime);
+                },
+            ));
             let monitor = Arc::new(MonitorManager::new(Arc::clone(&sessions)));
             let sftp = Arc::new(SftpManager::new(Arc::clone(&sessions)));
             let editor = Arc::new(RemoteEditorService::new(
@@ -1935,6 +2205,10 @@ pub fn run() {
                     Arc::clone(&sftp),
                     Arc::clone(&editor),
                     Arc::clone(&diagnostics),
+                    ai::AiTunnelServices {
+                        profiles: Arc::clone(&connection_profiles),
+                        tunnels: Arc::clone(&tunnels),
+                    },
                 )
                 .map_err(|error| std::io::Error::other(error.message))?,
             );
@@ -1986,6 +2260,15 @@ pub fn run() {
             tunnel_start,
             tunnel_stop,
             tunnel_status_list,
+            tunnel_event_history,
+            tunnel_check_target,
+            ssh_config_import_tunnel_rules,
+            socks5_rules_list,
+            socks5_rule_save,
+            socks5_rule_delete,
+            socks5_start,
+            socks5_stop,
+            socks5_status_list,
             connection_profiles_clear_recent,
             connection_groups_list,
             connection_group_create,
@@ -2035,6 +2318,7 @@ pub fn run() {
             ai_chat_start,
             ai_chat_cancel,
             ai_conversation_clear,
+            ai_tunnel_suggestion_save,
             diagnostic_templates_list,
             diagnostic_plan_create,
             diagnostic_plan_revise,

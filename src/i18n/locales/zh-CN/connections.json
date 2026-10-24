@@ -80,6 +80,7 @@
     "canceled": "连接已取消。",
     "inputTooLarge": "输入内容超过大小限制，已阻止发送。",
     "internal": "SSH 内部错误，请关闭并重新建立连接。",
+    "jumpHostUnavailable": "配置的跳板机不可用，目标连接已停止，未回退为直连。",
     "unknown": "无法建立连接，请检查主机、端口和网络。"
   },
   "manager": {
@@ -125,9 +126,19 @@
     "clearSavedCredentials": "同时清除关联的已保存密码和私钥口令",
     "credentialsWillRemain": "已保存凭据会保留在本机加密保险库中，以后仍可手动清除。",
     "deleteProfile": "删除配置",
+    "proxyJump": {
+      "label": "跳板机（ProxyJump）",
+      "direct": "直接连接",
+      "unavailable": "配置的跳板机不可用，目标连接已停止，未回退为直连。",
+      "invalid": "找不到配置的跳板机连接。",
+      "nestedUnsupported": "目前只支持单跳 ProxyJump；跳板机本身不能再配置其他跳板机。",
+      "connecting": "跳板机仍在连接中，请等 SSH 会话就绪后再连接目标机。",
+      "connectFirst": "请先连接并验证跳板机，再重试目标服务器。",
+      "importDependencyMissing": "ProxyJump 主机“{{alias}}”必须是可导入的 SSH Config 项，或已有的连接配置。"
+    },
     "previewConfig": "预览 SSH Config",
     "previewConfigDescription": "选择静态主机项并导入为本机连接配置。",
-    "configSafetyNotice": "只读解析，不修改源文件。ProxyCommand 和 Match exec 不会执行；ProxyJump 当前不会配置跳板。IdentityFile 只保存路径，不读取或复制密钥内容。",
+    "configSafetyNotice": "只读解析，不修改源文件。ProxyCommand 和 Match exec 绝不执行；单个静态 ProxyJump 主机别名会导入为跳板配置。IdentityFile 只保存路径，不读取或复制密钥内容。",
     "noStaticHosts": "没有可静态导入的具体主机。通配 Host 和动态 Match 仅显示为提示。",
     "privateKeyPath": "私钥路径",
     "duplicateProfileSkipped": "已存在同名配置，导入时会跳过。",

@@ -1355,6 +1355,7 @@ async fn diagnostic_report_preview(
     session_id: String,
     provider_id: String,
     evidence_ids: Vec<String>,
+    ui_language: String,
 ) -> Result<DiagnosticReportPreview, ai::AiError> {
     ai.diagnostic_report_preview(
         diagnostics.inner(),
@@ -1362,6 +1363,7 @@ async fn diagnostic_report_preview(
         &session_id,
         &provider_id,
         evidence_ids,
+        &ui_language,
     )
     .await
 }

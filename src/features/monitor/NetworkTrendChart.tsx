@@ -6,6 +6,7 @@ import { CanvasRenderer } from "echarts/renderers";
 import type { NetworkPoint } from "./monitorTypes";
 import { formatNetworkRate, toNetworkSeries } from "./networkChartModel";
 import { getUiFontScale } from "@/lib/uiFontScale";
+import { useTranslation } from "react-i18next";
 
 registerEChartsModules([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
@@ -26,20 +27,20 @@ function escapeTooltipText(value: string) {
   })[character] ?? character);
 }
 
-function formatNetworkTooltip(params: unknown, interfaceName: string) {
+function formatNetworkTooltip(params: unknown, interfaceName: string, locale: string | undefined, translate: (key: string) => string) {
   const rows = (Array.isArray(params) ? params : [params])
     .filter((item): item is NetworkTooltipItem => Boolean(item) && typeof item === "object");
   const timeValue = rows.find((item) => item.axisValue !== undefined)?.axisValue;
   const timestamp = typeof timeValue === "number" ? timeValue : Date.parse(String(timeValue ?? ""));
   const time = Number.isFinite(timestamp)
-    ? new Date(timestamp).toLocaleString("zh-CN", { hour12: false })
-    : rows.find((item) => item.axisValueLabel)?.axisValueLabel ?? "时间不可用";
+    ? new Date(timestamp).toLocaleString(locale, { hour12: false })
+    : rows.find((item) => item.axisValueLabel)?.axisValueLabel ?? translate("timeUnavailable");
   const series = rows.map((item) => {
     const value = Array.isArray(item.value) ? item.value[1] : item.value;
     const formatted = typeof value === "number" && Number.isFinite(value)
       ? formatNetworkRate(value)
-      : "无采样值";
-    return `<div>${escapeTooltipText(item.seriesName ?? "网络速率")}：${escapeTooltipText(formatted)}</div>`;
+      : translate("noSampleValue");
+    return `<div>${escapeTooltipText(item.seriesName ?? translate("networkRate"))}: ${escapeTooltipText(formatted)}</div>`;
   }).join("");
   return `<div>${escapeTooltipText(interfaceName)} · ${escapeTooltipText(time)}</div>${series}`;
 }
@@ -48,11 +49,11 @@ type NetworkTrendChartProps = {
   history: NetworkPoint[];
   theme: "dark" | "light";
   metricState?: string;
-  reason?: string | null;
   interfaceName: string;
 };
 
-export function NetworkTrendChart({ history, theme, metricState, reason, interfaceName }: NetworkTrendChartProps) {
+export function NetworkTrendChart({ history, theme, metricState, interfaceName }: NetworkTrendChartProps) {
+  const { t, i18n } = useTranslation("monitor");
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof init> | null>(null);
   const data = useMemo(() => toNetworkSeries(history), [history]);
@@ -96,7 +97,7 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
       grid: { left: 38, right: 8, top: 8, bottom: 22 },
       tooltip: {
         trigger: "axis",
-        formatter: (params: unknown) => formatNetworkTooltip(params, interfaceName),
+        formatter: (params: unknown) => formatNetworkTooltip(params, interfaceName, i18n.resolvedLanguage, t),
         axisPointer: { type: "line", lineStyle: { color: gridColor } },
         backgroundColor: theme === "dark" ? "#172232" : "#ffffff",
         borderColor: gridColor,
@@ -110,7 +111,7 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
           hideOverlap: true,
           color: textColor,
           fontSize: 8 * fontScale,
-          formatter: (value: number) => new Date(value).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" }),
+          formatter: (value: number) => new Date(value).toLocaleTimeString(i18n.resolvedLanguage, { hour12: false, hour: "2-digit", minute: "2-digit" }),
         },
         axisLine: { lineStyle: { color: gridColor } },
         axisTick: { show: false },
@@ -127,7 +128,7 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
       },
       series: [
         {
-          name: "↓ 接收",
+          name: `↓ ${t("receive")}`,
           type: "line",
           showSymbol: false,
           connectNulls: false,
@@ -136,7 +137,7 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
           data: data.map((point) => [point.timestamp, point.received]),
         },
         {
-          name: "↑ 发送",
+          name: `↑ ${t("send")}`,
           type: "line",
           showSymbol: false,
           connectNulls: false,
@@ -148,19 +149,19 @@ export function NetworkTrendChart({ history, theme, metricState, reason, interfa
     };
     chart.setOption(option, { notMerge: true, lazyUpdate: true });
     chart.resize();
-  }, [data, interfaceName, metricState, reason, theme]);
+  }, [data, i18n.resolvedLanguage, interfaceName, metricState, t, theme]);
 
   const statusText = metricState === "stale"
-    ? "数据已过期，曲线仅保留最近的有效采样。"
+    ? t("staleChartData")
     : metricState === "error" || metricState === "unsupported"
-      ? reason ?? "当前无法读取网卡速率。"
+      ? t("networkRateUnavailable")
       : !hasValue
-        ? "等待有效网卡采样。"
+        ? t("waitingForNetworkSample")
         : null;
 
   return (
-    <div className="relative h-[64px] w-full" aria-label={`${interfaceName} 服务器网络收发速率趋势`}>
-      <div ref={hostRef} className="absolute inset-0" role="img" aria-label={`${interfaceName} 接收与发送速率，使用服务器真实采样时间`} />
+    <div className="relative h-[64px] w-full" aria-label={t("networkTrendLabel", { interfaceName })}>
+      <div ref={hostRef} className="absolute inset-0" role="img" aria-label={t("networkChartDescription", { interfaceName })} />
       {statusText && <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-panel/75 px-2 text-center text-[9px] text-muted-foreground">{statusText}</div>}
     </div>
   );

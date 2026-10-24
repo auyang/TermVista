@@ -26,11 +26,13 @@ import { selectQuickConnectProfiles, type ProfileFilter } from "@/features/home/
 import type { ConnectionProfile } from "@/stores/workspaceStore";
 import { useSshSessionStore } from "@/stores/sshSessionStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useTranslation } from "react-i18next";
 
 const inflightConnections = new Map<string, Promise<unknown>>();
 const connectingStates = new Set(["connecting", "verifyingHostKey", "authenticating", "openingPty"]);
 
 export function HomeTab() {
+  const { t } = useTranslation("home");
   const profiles = useWorkspaceStore((state) => state.profiles);
   const profilesLoadStatus = useWorkspaceStore((state) => state.profilesLoadStatus);
   const lastSftpPaths = useWorkspaceStore((state) => state.lastSftpPaths);
@@ -94,8 +96,8 @@ export function HomeTab() {
     try {
       await saveConnectionProfile(updated);
       replaceProfiles(useWorkspaceStore.getState().profiles.map((item) => item.id === profile.id ? updated : item));
-    } catch (error) {
-      toast.error(`无法保存收藏状态：${errorMessage(error)}`);
+    } catch {
+      toast.error(t("toast.favoriteSaveFailed"));
     }
   };
 
@@ -106,17 +108,17 @@ export function HomeTab() {
       useWorkspaceStore.getState().removeProfile(deleteTarget.id);
       setSelectedIds((items) => items.filter((id) => id !== deleteTarget.id));
       setDeleteTarget(null);
-    } catch (error) {
-      toast.error(`无法删除服务器配置：${errorMessage(error)}`);
+    } catch {
+      toast.error(t("toast.deleteFailed"));
     }
   };
 
   const copyHost = async (profile: ConnectionProfile) => {
     try {
       await navigator.clipboard.writeText(profile.host);
-      toast.success(`已复制 ${profile.host}`);
+      toast.success(t("toast.hostCopied", { host: profile.host }));
     } catch {
-      toast.error("无法访问剪贴板，请手动复制主机地址。");
+      toast.error(t("toast.clipboardUnavailable"));
     }
   };
 
@@ -124,9 +126,9 @@ export function HomeTab() {
     try {
       await clearRecentConnections();
       useWorkspaceStore.getState().clearRecentConnections();
-      toast.success("最近连接时间已清除，服务器配置和凭据保持不变。");
-    } catch (error) {
-      toast.error(`无法清除最近连接记录：${errorMessage(error)}`);
+      toast.success(t("toast.recentCleared"));
+    } catch {
+      toast.error(t("toast.recentClearFailed"));
     }
   };
 
@@ -135,11 +137,11 @@ export function HomeTab() {
     for (const profile of selectedProfiles) {
       const connected = await openProfile(profile);
       if (!connected) {
-        toast.message(`已暂停批量连接。请先完成“${profile.name}”的登录验证，再重新启动剩余连接。`);
+        toast.message(t("batch.paused", { name: profile.name }));
         return;
       }
     }
-    toast.success(`已处理 ${selectedProfiles.length} 台服务器。`);
+    toast.success(t("batch.completed", { count: selectedProfiles.length }));
     setSelectedIds([]);
   };
 
@@ -182,61 +184,61 @@ export function HomeTab() {
   };
 
   return (
-    <main className="compact-scrollbar flex min-h-0 flex-1 items-center justify-center overflow-auto bg-background px-5 py-4" aria-label="快速连接首页">
+    <main className="compact-scrollbar flex min-h-0 flex-1 items-center justify-center overflow-auto bg-background px-5 py-4" aria-label={t("title")}>
       <section className="flex w-full max-w-[920px] flex-col overflow-hidden rounded-md border border-border bg-panel shadow-sm" aria-labelledby="quick-connect-title">
         <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-border bg-panel-header/55 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-accent/20 bg-accent/10 text-accent"><Monitor size={17} /></span>
             <div className="min-w-0">
-              <h1 id="quick-connect-title" className="text-[17px] font-semibold leading-5">快速连接</h1>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">双击连接，打开终端或文件管理器</p>
+              <h1 id="quick-connect-title" className="text-[17px] font-semibold leading-5">{t("title")}</h1>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{t("subtitle")}</p>
             </div>
           </div>
           <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 rounded-sm px-2 text-xs text-accent" onClick={openManager}>
-            <FolderOpen size={13} />管理连接
+            <FolderOpen size={13} />{t("manageConnections")}
           </Button>
         </header>
 
         {profilesLoadStatus === "loading" ? <LoadingRows /> : profilesLoadStatus === "error" ? (
           <div className="flex min-h-52 flex-col items-center justify-center gap-2 px-6 text-center" role="alert">
             <Server size={20} className="text-muted-foreground" />
-            <div className="text-sm font-medium">无法读取本机连接配置</div>
-            <p className="max-w-md text-xs text-muted-foreground">配置数据库暂时不可用。已保存的连接没有被清除，可以重试读取。</p>
-            <Button type="button" variant="outline" size="sm" className="mt-1 h-7 rounded-sm text-xs" onClick={() => void retryLoad()}><RefreshCw size={12} />重试</Button>
+            <div className="text-sm font-medium">{t("loadError.title")}</div>
+            <p className="max-w-md text-xs text-muted-foreground">{t("loadError.description")}</p>
+            <Button type="button" variant="outline" size="sm" className="mt-1 h-7 rounded-sm text-xs" onClick={() => void retryLoad()}><RefreshCw size={12} />{t("loadError.retry")}</Button>
           </div>
         ) : profiles.length === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
             <span className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-panel-header text-muted-foreground"><Server size={20} /></span>
-            <h2 className="mt-1 text-sm font-semibold">还没有服务器连接</h2>
-            <p className="max-w-sm text-xs text-muted-foreground">添加 SSH 服务器配置后，它会显示在这里。连接密码和私钥口令可由本机加密保险库安全保管。</p>
-            <Button type="button" size="sm" className="mt-2 h-7 rounded-sm px-3 text-xs" onClick={openManager}><Plus size={13} />新增 SSH 连接</Button>
+            <h2 className="mt-1 text-sm font-semibold">{t("empty.title")}</h2>
+            <p className="max-w-sm text-xs text-muted-foreground">{t("empty.description")}</p>
+            <Button type="button" size="sm" className="mt-2 h-7 rounded-sm px-3 text-xs" onClick={openManager}><Plus size={13} />{t("empty.addSsh")}</Button>
           </div>
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-              <div className="flex items-center gap-1" role="group" aria-label="连接筛选">
-                <FilterButton label="全部" active={filter === "all"} onClick={() => setFilter("all")} />
-                <FilterButton label="收藏" active={filter === "favorite"} onClick={() => setFilter("favorite")} />
-                <FilterButton label="最近" active={filter === "recent"} onClick={() => setFilter("recent")} />
+              <div className="flex items-center gap-1" role="group" aria-label={t("filter.aria")}>
+                <FilterButton label={t("filter.all")} active={filter === "all"} onClick={() => setFilter("all")} />
+                <FilterButton label={t("filter.favorites")} active={filter === "favorite"} onClick={() => setFilter("favorite")} />
+                <FilterButton label={t("filter.recent")} active={filter === "recent"} onClick={() => setFilter("recent")} />
               </div>
               <div className="flex min-w-[220px] flex-1 items-center justify-end gap-2">
-                {selectedProfiles.length > 0 && <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 rounded-sm px-2 text-[11px]" onClick={() => setBatchConfirmOpen(true)}>批量连接 ({selectedProfiles.length})</Button>}
+                {selectedProfiles.length > 0 && <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 rounded-sm px-2 text-[11px]" onClick={() => setBatchConfirmOpen(true)}>{t("batch.connectCount", { count: selectedProfiles.length })}</Button>}
                 <div className="relative w-full max-w-[250px]">
                   <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input ref={searchRef} className="h-7 rounded-sm pl-7 text-xs" placeholder="搜索名称、主机或用户" aria-label="搜索连接" value={search} onChange={(event) => setSearch(event.target.value)} />
+                  <Input ref={searchRef} className="h-7 rounded-sm pl-7 text-xs" placeholder={t("search.placeholder")} aria-label={t("search.aria")} value={search} onChange={(event) => setSearch(event.target.value)} />
                 </div>
               </div>
             </div>
             <div className="compact-scrollbar max-h-[min(58vh,620px)] min-h-36 overflow-auto">
-              {visibleProfiles.length === 0 ? <div className="flex min-h-36 items-center justify-center text-xs text-muted-foreground">没有符合筛选条件的服务器。</div> : (
+              {visibleProfiles.length === 0 ? <div className="flex min-h-36 items-center justify-center text-xs text-muted-foreground">{t("emptyFiltered")}</div> : (
                 <table className="w-full min-w-[620px] border-collapse text-left text-xs">
                   <thead className="sticky top-0 z-10 bg-panel-header text-[10px] font-semibold text-muted-foreground shadow-[0_1px_0_var(--app-border)]">
                     <tr className="h-9">
-                      <th className="h-9 w-10 px-3 py-0 text-center align-middle font-normal leading-none" scope="col"><span className="sr-only">选择</span></th>
-                      <th className="h-9 min-w-[220px] px-2 py-0 align-middle leading-none" scope="col">连接名称</th>
-                      <th className="h-9 w-[31%] px-2 py-0 align-middle leading-none" scope="col">上次使用路径</th>
-                      <th className="h-9 w-[17%] px-2 py-0 align-middle leading-none" scope="col">用户</th>
-                      <th className="h-9 w-12 px-2 py-0 text-center align-middle leading-none" scope="col"><span className="sr-only">操作</span></th>
+                      <th className="h-9 w-10 px-3 py-0 text-center align-middle font-normal leading-none" scope="col"><span className="sr-only">{t("table.select")}</span></th>
+                      <th className="h-9 min-w-[220px] px-2 py-0 align-middle leading-none" scope="col">{t("table.name")}</th>
+                      <th className="h-9 w-[31%] px-2 py-0 align-middle leading-none" scope="col">{t("table.lastPath")}</th>
+                      <th className="h-9 w-[17%] px-2 py-0 align-middle leading-none" scope="col">{t("table.user")}</th>
+                      <th className="h-9 w-12 px-2 py-0 text-center align-middle leading-none" scope="col"><span className="sr-only">{t("table.actions")}</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -262,7 +264,7 @@ export function HomeTab() {
                                 <input
                                   type="checkbox"
                                   className="h-3.5 w-3.5 accent-[var(--app-accent)]"
-                                  aria-label={`选择 ${profile.name} 用于批量连接`}
+                                  aria-label={t("actions.selected", { name: profile.name })}
                                   checked={selectedIds.includes(profile.id)}
                                   disabled={!selectedIds.includes(profile.id) && selectedIds.length >= 3}
                                   onChange={(event) => {
@@ -277,45 +279,45 @@ export function HomeTab() {
                                   <span className="min-w-0 flex-1">
                                     <span className="flex items-center gap-1.5">
                                       <span className="truncate font-medium" title={profile.name}>{profile.name}</span>
-                                      {profile.favorite && <Star size={11} className="shrink-0 fill-amber-500 text-amber-500" aria-label="已收藏" />}
-                                      {status && <span className={`shrink-0 rounded-sm border px-1 text-[9px] leading-[15px] ${status === "已连接" ? "border-emerald-500/25 text-emerald-700 dark:text-emerald-400" : "border-amber-500/25 text-amber-700 dark:text-amber-300"}`}>{status}</span>}
+                                      {profile.favorite && <Star size={11} className="shrink-0 fill-amber-500 text-amber-500" aria-label={t("actions.isFavorite")} />}
+                                      {status && <span className={`shrink-0 rounded-sm border px-1 text-[9px] leading-[15px] ${status === "connected" ? "border-emerald-500/25 text-emerald-700 dark:text-emerald-400" : "border-amber-500/25 text-amber-700 dark:text-amber-300"}`}>{status === "connected" ? t("status.connected") : t("status.connecting")}</span>}
                                     </span>
                                     <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground" title={`${profile.host}:${profile.port}`}>{profile.host}:{profile.port || 22}</span>
                                   </span>
                                 </div>
                               </td>
-                              <td className="max-w-0 px-2 font-mono text-[11px] text-muted-foreground"><span className="block truncate" title={lastSftpPaths[profile.id] ?? "未记录远程路径"}>{lastSftpPaths[profile.id] ?? "—"}</span></td>
+                              <td className="max-w-0 px-2 font-mono text-[11px] text-muted-foreground"><span className="block truncate" title={lastSftpPaths[profile.id] ?? t("actions.lastPathNotRecorded")}>{lastSftpPaths[profile.id] ?? "—"}</span></td>
                               <td className="max-w-0 px-2"><span className="block truncate" title={profile.username}>{profile.username || "—"}</span></td>
                               <td className="px-2 text-center" onClick={(event) => event.stopPropagation()}>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-sm text-muted-foreground" aria-label={`更多操作：${profile.name}`} title="更多操作"><MoreHorizontal size={15} /></Button>
+                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 rounded-sm text-muted-foreground" aria-label={`${t("actions.more")}：${profile.name}`} title={t("actions.more")}><MoreHorizontal size={15} /></Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onSelect={() => void openProfile(profile)}><Server size={12} />连接</DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => void openProfile(profile, true)}><Plus size={12} />在新会话中连接</DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => void openSftp(profile)}><FolderOpen size={12} />打开 SFTP</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => void openProfile(profile)}><Server size={12} />{t("actions.connect")}</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => void openProfile(profile, true)}><Plus size={12} />{t("actions.connectNew")}</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => void openSftp(profile)}><FolderOpen size={12} />{t("actions.openSftp")}</DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem onSelect={() => requestProfileEdit(profile.id)}><Pencil size={12} />编辑</DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => void persistFavorite(profile)}><Star size={12} />{profile.favorite ? "取消收藏" : "收藏"}</DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => void copyHost(profile)}><Copy size={12} />复制主机地址</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => requestProfileEdit(profile.id)}><Pencil size={12} />{t("actions.edit")}</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => void persistFavorite(profile)}><Star size={12} />{t(profile.favorite ? "actions.unfavorite" : "actions.favorite")}</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => void copyHost(profile)}><Copy size={12} />{t("actions.copyHost")}</DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteTarget(profile)}><Trash2 size={12} />删除配置…</DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteTarget(profile)}><Trash2 size={12} />{t("actions.delete")}</DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </td>
                             </tr>
                           </ContextMenuTrigger>
                           <ContextMenuContent>
-                            <ContextMenuItem onSelect={() => void openProfile(profile)}><Server size={12} />连接</ContextMenuItem>
-                            <ContextMenuItem onSelect={() => void openProfile(profile, true)}><Plus size={12} />在新会话中连接</ContextMenuItem>
-                            <ContextMenuItem onSelect={() => void openSftp(profile)}><FolderOpen size={12} />打开 SFTP</ContextMenuItem>
+                            <ContextMenuItem onSelect={() => void openProfile(profile)}><Server size={12} />{t("actions.connect")}</ContextMenuItem>
+                            <ContextMenuItem onSelect={() => void openProfile(profile, true)}><Plus size={12} />{t("actions.connectNew")}</ContextMenuItem>
+                            <ContextMenuItem onSelect={() => void openSftp(profile)}><FolderOpen size={12} />{t("actions.openSftp")}</ContextMenuItem>
                             <ContextMenuSeparator />
-                            <ContextMenuItem onSelect={() => requestProfileEdit(profile.id)}><Pencil size={12} />编辑</ContextMenuItem>
-                            <ContextMenuItem onSelect={() => void persistFavorite(profile)}><Star size={12} />{profile.favorite ? "取消收藏" : "收藏"}</ContextMenuItem>
-                            <ContextMenuItem onSelect={() => void copyHost(profile)}><Copy size={12} />复制主机地址</ContextMenuItem>
+                            <ContextMenuItem onSelect={() => requestProfileEdit(profile.id)}><Pencil size={12} />{t("actions.edit")}</ContextMenuItem>
+                            <ContextMenuItem onSelect={() => void persistFavorite(profile)}><Star size={12} />{t(profile.favorite ? "actions.unfavorite" : "actions.favorite")}</ContextMenuItem>
+                            <ContextMenuItem onSelect={() => void copyHost(profile)}><Copy size={12} />{t("actions.copyHost")}</ContextMenuItem>
                             <ContextMenuSeparator />
-                            <ContextMenuItem onSelect={() => setDeleteTarget(profile)}><Trash2 size={12} />删除配置…</ContextMenuItem>
+                            <ContextMenuItem onSelect={() => setDeleteTarget(profile)}><Trash2 size={12} />{t("actions.delete")}</ContextMenuItem>
                           </ContextMenuContent>
                         </ContextMenu>
                       );
@@ -325,10 +327,10 @@ export function HomeTab() {
               )}
             </div>
             <footer className="flex min-h-9 flex-wrap items-center justify-between gap-2 border-t border-border bg-panel-header/45 px-3 text-[10px] text-muted-foreground">
-              <span>{profiles.length} 台已保存服务器 · 双击或 Enter 连接 · 右键打开操作</span>
+              <span>{t("footer.savedCount", { count: profiles.length })} · {t("footer.usage")}</span>
               <div className="flex items-center gap-3">
-                {profiles.some((profile) => profile.lastConnectedAt) && <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => void clearRecent()}><Clock3 size={11} />清除最近记录</button>}
-                <span>最多同时选择 3 台</span>
+                {profiles.some((profile) => profile.lastConnectedAt) && <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => void clearRecent()}><Clock3 size={11} />{t("footer.clearRecent")}</button>}
+                <span>{t("batch.maxSelected")}</span>
               </div>
             </footer>
           </>
@@ -337,30 +339,30 @@ export function HomeTab() {
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
-          <AlertDialogTitle>删除连接配置？</AlertDialogTitle>
+          <AlertDialogTitle>{t("delete.title")}</AlertDialogTitle>
           <AlertDialogDescription>
-            将删除“{deleteTarget?.name}”的本机连接配置。保存的系统凭据与主机指纹不会因此删除。
-            {deleteTarget && profileActivity(deleteTarget, tabs, sessions) && " 当前 SSH 会话会继续运行；关闭标签后该配置不会再自动恢复。"}
+            {t("delete.description", { name: deleteTarget?.name })}
+            {deleteTarget && profileActivity(deleteTarget, tabs, sessions) && t("delete.activeSession")}
           </AlertDialogDescription>
           <div className="flex justify-end gap-2">
-            <AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">取消</Button></AlertDialogCancel>
-            <Button type="button" variant="destructive" size="sm" className="h-7 rounded-sm px-2" onClick={() => void confirmDelete()}>删除配置</Button>
+            <AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">{t("delete.cancel")}</Button></AlertDialogCancel>
+            <Button type="button" variant="destructive" size="sm" className="h-7 rounded-sm px-2" onClick={() => void confirmDelete()}>{t("delete.confirm")}</Button>
           </div>
         </AlertDialogContent>
       </AlertDialog>
 
       <AlertDialog open={batchConfirmOpen} onOpenChange={setBatchConfirmOpen}>
         <AlertDialogContent>
-          <AlertDialogTitle>批量连接服务器？</AlertDialogTitle>
+          <AlertDialogTitle>{t("batch.title")}</AlertDialogTitle>
           <AlertDialogDescription>
-            将依次处理以下 {selectedProfiles.length} 台服务器。每台都继续执行各自的主机指纹核验和凭据流程；遇到需要人工登录的服务器时会暂停。
+            {t("batch.description", { count: selectedProfiles.length })}
           </AlertDialogDescription>
           <ul className="max-h-32 overflow-y-auto rounded-sm border border-border px-3 py-2 text-xs">
             {selectedProfiles.map((profile) => <li key={profile.id} className="truncate py-0.5">{profile.name} <span className="font-mono text-muted-foreground">{profile.username}@{profile.host}:{profile.port}</span></li>)}
           </ul>
           <div className="flex justify-end gap-2">
-            <AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">取消</Button></AlertDialogCancel>
-            <Button type="button" size="sm" className="h-7 rounded-sm px-2" onClick={() => void batchConnect()}>开始连接</Button>
+            <AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">{t("delete.cancel")}</Button></AlertDialogCancel>
+            <Button type="button" size="sm" className="h-7 rounded-sm px-2" onClick={() => void batchConnect()}>{t("batch.start")}</Button>
           </div>
         </AlertDialogContent>
       </AlertDialog>
@@ -373,13 +375,14 @@ function FilterButton({ label, active, onClick }: { label: string; active: boole
 }
 
 function LoadingRows() {
-  return <div className="space-y-0 px-3 py-3" role="status" aria-label="正在读取服务器配置">
+  const { t } = useTranslation("home");
+  return <div className="space-y-0 px-3 py-3" role="status" aria-label={t("loading.aria")}>
     <div className="mb-2 flex h-7 items-center justify-between"><span className="h-3 w-24 animate-pulse rounded-sm bg-muted" /><span className="h-6 w-44 animate-pulse rounded-sm bg-muted" /></div>
     <div className="h-8 border-y border-border bg-panel-header/45" />
     {Array.from({ length: 5 }, (_, index) => <div key={index} className="flex h-12 items-center gap-3 border-b border-border/70 px-3">
       <span className="h-3.5 w-3.5 animate-pulse rounded-sm bg-muted" /><span className="h-6 w-6 animate-pulse rounded-sm bg-muted" /><span className="h-3 w-40 animate-pulse rounded-sm bg-muted" />
     </div>)}
-    <span className="sr-only">正在读取本机服务器配置</span>
+    <span className="sr-only">{t("loading.screenReader")}</span>
   </div>;
 }
 
@@ -391,11 +394,7 @@ function profileActivity(
   const profileSessions = tabs.filter((tab) => tab.mode === "ssh" && tab.profileId === profile.id)
     .map((tab) => sessions[tab.id])
     .filter(Boolean);
-  if (profileSessions.some((session) => session.state === "connected" && session.sessionId)) return "已连接";
-  if (profileSessions.some((session) => connectingStates.has(session.state))) return "连接中";
+  if (profileSessions.some((session) => session.state === "connected" && session.sessionId)) return "connected";
+  if (profileSessions.some((session) => connectingStates.has(session.state))) return "connecting";
   return null;
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
 }

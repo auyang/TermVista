@@ -22,11 +22,11 @@ export function generateSshKey(input: {
   rsaBits?: 3072 | 4096;
   passphrase: string;
 }) {
-  return runWithUpdateMaintenanceTask("生成 SSH 密钥", () => invoke<SshKeyMetadata>("ssh_key_generate", input));
+  return runWithUpdateMaintenanceTask("sshKeyGenerate", () => invoke<SshKeyMetadata>("ssh_key_generate", input));
 }
 
 export function importSshKey(input: { path: string; alias: string; passphrase?: string }) {
-  return runWithUpdateMaintenanceTask("导入 SSH 密钥", () => invoke<SshKeyMetadata>("ssh_key_import", input));
+  return runWithUpdateMaintenanceTask("sshKeyImport", () => invoke<SshKeyMetadata>("ssh_key_import", input));
 }
 
 export function exportSshKey(input: {
@@ -35,9 +35,9 @@ export function exportSshKey(input: {
   currentPassphrase?: string;
   exportPassphrase: string;
 }) {
-  return runWithUpdateMaintenanceTask("导出 SSH 密钥", () => invoke<void>("ssh_key_export", input));
+  return runWithUpdateMaintenanceTask("sshKeyExport", () => invoke<void>("ssh_key_export", input));
 }
 
 export function deleteSshKey(keyId: string) {
-  return runWithUpdateMaintenanceTask("删除 SSH 密钥", () => invoke<boolean>("ssh_key_delete", { keyId }));
+  return runWithUpdateMaintenanceTask("sshKeyDelete", () => invoke<boolean>("ssh_key_delete", { keyId }));
 }

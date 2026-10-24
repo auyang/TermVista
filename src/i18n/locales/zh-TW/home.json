@@ -1,0 +1,86 @@
+{
+  "title": "快速連線",
+  "subtitle": "按兩下即可連線、開啟終端機或瀏覽檔案",
+  "manageConnections": "管理連線",
+  "loading": {
+    "aria": "正在讀取伺服器設定",
+    "screenReader": "正在讀取本機伺服器設定"
+  },
+  "loadError": {
+    "title": "無法讀取本機連線設定",
+    "description": "設定資料庫暫時無法使用。已儲存的連線仍會保留，請重試讀取。",
+    "retry": "重試"
+  },
+  "empty": {
+    "title": "尚未新增伺服器連線",
+    "description": "新增 SSH 連線設定後就會顯示在這裡。登入密碼與私鑰密語可安全儲存在本機加密保險庫。",
+    "addSsh": "新增 SSH 連線"
+  },
+  "filter": {
+    "aria": "篩選連線",
+    "all": "全部",
+    "favorites": "收藏",
+    "recent": "最近"
+  },
+  "batch": {
+    "connectCount": "批次連線（{{count}}）",
+    "paused": "批次連線已暫停。請先完成「{{name}}」的登入驗證，再重新啟動其餘連線。",
+    "completed": "已處理 {{count}} 台伺服器。",
+    "title": "要批次連線伺服器嗎？",
+    "description": "將依序處理以下 {{count}} 台伺服器。每台仍會執行各自的主機金鑰與認證檢查；遇到需要人工登入時會暫停。",
+    "start": "開始連線",
+    "maxSelected": "最多同時選取 3 台"
+  },
+  "search": {
+    "placeholder": "搜尋名稱、主機或使用者",
+    "aria": "搜尋連線"
+  },
+  "emptyFiltered": "沒有符合篩選條件的伺服器。",
+  "table": {
+    "select": "選取",
+    "name": "連線名稱",
+    "lastPath": "上次使用路徑",
+    "user": "使用者",
+    "actions": "操作"
+  },
+  "actions": {
+    "more": "更多操作",
+    "connect": "連線",
+    "connectNew": "在新工作階段中連線",
+    "openSftp": "開啟 SFTP",
+    "edit": "編輯",
+    "favorite": "加入收藏",
+    "unfavorite": "取消收藏",
+    "copyHost": "複製主機位址",
+    "delete": "刪除設定…",
+    "selected": "選取 {{name}} 以批次連線",
+    "isFavorite": "已收藏",
+    "lastPathNotRecorded": "未記錄遠端路徑"
+  },
+  "status": {
+    "connected": "已連線",
+    "connecting": "連線中"
+  },
+  "footer": {
+    "savedCount": "已儲存 {{count}} 台伺服器",
+    "usage": "按兩下或按 Enter 連線 · 按右鍵開啟操作",
+    "clearRecent": "清除最近記錄"
+  },
+  "delete": {
+    "title": "要刪除此連線設定嗎？",
+    "description": "將刪除 {{name}} 的本機連線設定。不會刪除已儲存的系統認證資料與信任的主機指紋。",
+    "activeSession": "目前 SSH 工作階段會繼續執行；關閉分頁後不會自動還原此設定。",
+    "cancel": "取消",
+    "confirm": "刪除設定"
+  },
+  "toast": {
+    "favoriteSaveFailed": "無法更新收藏狀態。",
+    "deleteFailed": "無法刪除伺服器設定。",
+    "hostCopied": "已複製 {{host}}",
+    "clipboardUnavailable": "無法使用剪貼簿，請手動複製主機位址。",
+    "recentCleared": "已清除最近連線時間，伺服器設定與認證資料均予以保留。",
+    "recentClearFailed": "無法清除最近連線記錄。",
+    "batchPaused": "批次連線已暫停。請先完成「{{name}}」的登入驗證，再重新啟動其餘連線。",
+    "batchCompleted": "已處理 {{count}} 台伺服器。"
+  }
+}

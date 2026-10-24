@@ -1,0 +1,380 @@
+{
+  "title": "Settings",
+  "about": "About TermVista",
+  "interfaceLanguage": "Interface language",
+  "systemLanguage": "Follow system language",
+  "systemLanguageResolved": "Current system language: {{language}}",
+  "saveFailed": "Could not save the language preference. Restored {{language}}.",
+  "restartNotRequired": "Changes apply immediately.",
+  "nav": {
+    "general": "General",
+    "terminal": "Terminal",
+    "connections": "Connections and Security",
+    "sftp": "File Transfers",
+    "monitoring": "Server Monitoring",
+    "aiPrivacy": "AI and Privacy",
+    "appearance": "Appearance and Shortcuts",
+    "about": "About TermVista"
+  },
+  "dialog": {
+    "description": "Manage application preferences and security options. SSH credentials are protected by the local encrypted vault.",
+    "categories": "Settings categories",
+    "resetConfirm": "Restore the default settings for {{section}}? Only settings will change.",
+    "reset": "Restore defaults for {{section}}",
+    "close": "Close",
+    "saveError": "Could not save settings. The previous value is still shown: {{error}}"
+  },
+  "row": {
+    "state": "Current: {{value}} · Applies: {{timing}}",
+    "stateWithDefault": "Current: {{value}} · Default: {{defaultValue}} · Applies: {{timing}}"
+  },
+  "values": {
+    "on": "On",
+    "off": "Off",
+    "paused": "Paused",
+    "immediately": "Immediately",
+    "nextLaunch": "Next launch",
+    "newTerminal": "New terminal",
+    "currentVersion": "Current version",
+    "eachConnection": "Each connection",
+    "eachTask": "Each task",
+    "eachDownload": "Each download",
+    "eachRequest": "Each request",
+    "eachProvider": "Each provider",
+    "currentSession": "Current session",
+    "followSystem": "Follow system",
+    "light": "Light",
+    "dark": "Dark",
+    "show": "Shown",
+    "hide": "Hidden",
+    "expanded": "Expanded",
+    "compact": "Compact",
+    "quickConnect": "Quick Connect",
+    "notAvailable": "Not available",
+    "enabled": "Enabled",
+    "enforced": "Always enabled",
+    "ask": "Ask each time",
+    "onePerSession": "One per session",
+    "orderedQueue": "Sequential queue",
+    "confirmEach": "Confirm each operation",
+    "systemPicker": "System file picker",
+    "readOnlyAllowlist": "Read-only allowlist",
+    "sessionIsolated": "Isolated by session",
+    "byProvider": "Managed per provider",
+    "enginePolicy": "Engine policy",
+    "engineDefault": "Engine default",
+    "currentConnections": "Read when connected",
+    "permissionEachTime": "Confirm each time",
+    "notConfigured": "Not configured",
+    "openAiPanel": "When opening the AI panel",
+    "lines": "lines"
+  },
+  "loading": {
+    "reading": "Loading settings…",
+    "notLoaded": "Settings have not loaded."
+  },
+  "toggle": {
+    "on": "On",
+    "off": "Off"
+  },
+  "general": {
+    "title": "General",
+    "description": "Manage workspace restoration and local connection history. SSH sessions, PTYs, and remote processes do not resume after the window restarts.",
+    "restoreWorkspace": {
+      "title": "Restore tabs and workspace",
+      "description": "Restores local tabs, panel layout, and the last SFTP path only. Remote processes are not restored."
+    },
+    "autoConnect": {
+      "title": "Reconnect restored server tabs",
+      "description": "Only SSH tabs from the previous workspace are considered. First-time host-key checks, missing credentials, and login confirmation still follow the normal security flow."
+    },
+    "recentConnections": {
+      "title": "Keep recent connections",
+      "description": "When disabled, no new recent-connection timestamps are recorded. Existing profiles, favorites, credentials, and trusted fingerprints remain."
+    },
+    "checkUpdates": {
+      "title": "Check for updates at startup",
+      "description": "Checks in the background after startup. A non-blocking notice appears when an update is available; nothing is downloaded or installed automatically."
+    },
+    "newTab": {
+      "title": "New tab",
+      "description": "New tabs open the Quick Connect home."
+    }
+  },
+  "terminal": {
+    "title": "Terminal",
+    "description": "Font size and cursor changes apply to open SSH terminals immediately. Scrollback remains bounded.",
+    "fontSize": {
+      "title": "Terminal font size",
+      "description": "Range 11–24 px. Previewed immediately in the current session."
+    },
+    "font": {
+      "title": "Font",
+      "description": "Uses the system monospace font fallback list."
+    },
+    "lineHeight": {
+      "title": "Line height",
+      "description": "xterm.js line-height multiplier, from 1.0 to 2.0."
+    },
+    "cursorStyle": {
+      "title": "Cursor style",
+      "description": "Terminal cursor shape.",
+      "block": "Block",
+      "underline": "Underline",
+      "bar": "Bar"
+    },
+    "cursorBlink": {
+      "title": "Cursor blinking",
+      "description": "Controls cursor blinking in the current terminal."
+    },
+    "colorScheme": {
+      "title": "Terminal color scheme",
+      "description": "The terminal stays dark. Follow theme uses the application theme's default terminal colors.",
+      "follow": "Follow theme",
+      "dark": "Dark terminal"
+    },
+    "scrollback": {
+      "title": "Scrollback buffer",
+      "description": "Limits the number of historical lines kept by each terminal. Session output is not persisted."
+    },
+    "pastePreview": {
+      "title": "Review multiline paste",
+      "description": "Previews multiline content and control characters. Oversized content and pastes while disconnected are still blocked by security checks."
+    },
+    "clearHistory": {
+      "title": "Clear screen and scrollback separately",
+      "description": "Terminal control sequences can clear the screen and scrollback separately. This page does not combine actions that could remove session state."
+    }
+  },
+  "connections": {
+    "title": "Connections and Security",
+    "description": "Host identity checks are always on. Automatic reconnect requires both the global option and the per-connection option, plus available local credentials.",
+    "autoReconnect": {
+      "title": "Allow automatic reconnect",
+      "description": "Retries with exponential backoff up to five times. It must also be enabled for each server. A host-key change stops retries immediately."
+    },
+    "hostKey": {
+      "title": "SSH host-key verification",
+      "description": "On first connection, choose whether to trust the key for this session or save it permanently. A changed trusted key blocks the connection."
+    },
+    "trustedHosts": {
+      "title": "Trusted hosts and fingerprints",
+      "description": "Review each host's key algorithm, SHA256 fingerprint, and trust time. Revoking a key requires verification on the next connection.",
+      "button": "View trusted hosts"
+    },
+    "timeout": {
+      "title": "SSH timeout",
+      "description": "Uses the current SSH engine timeout policy. No separate timeout control is available in this version."
+    },
+    "credentials": {
+      "title": "Saved login credentials",
+      "description": "Passwords and private-key passphrases are protected by the local encrypted vault. Settings and status interfaces never read or return secrets.",
+      "button": "Open Connection Manager"
+    }
+  },
+  "sftp": {
+    "title": "File Transfers",
+    "description": "Shows the transfer-safety policies currently implemented. No controls are shown for settings that are not connected to the backend.",
+    "concurrency": {
+      "title": "Concurrent transfers",
+      "description": "Transfers run sequentially within each SSH session to avoid simultaneous writes to remote destinations."
+    },
+    "conflicts": {
+      "title": "File name conflicts",
+      "description": "When a destination exists, choose whether to skip, keep both, or overwrite for the current queue."
+    },
+    "delete": {
+      "title": "Confirm remote deletion",
+      "description": "The target is shown and confirmation is required before deletion."
+    },
+    "downloadLocation": {
+      "title": "Local download location",
+      "description": "Choose a destination with the system file picker for each download. No fixed location is saved."
+    },
+    "editorConflict": {
+      "title": "Remote editor conflict checks",
+      "description": "No separate modification-time option is shown because this version has no standalone remote text editor."
+    }
+  },
+  "monitoring": {
+    "title": "Server Monitoring",
+    "description": "Monitoring data comes only from active SSH sessions. Pausing stops background sampling; no demo metrics are displayed.",
+    "enabled": {
+      "title": "Monitor current connections",
+      "description": "Turning this off stops sampling for all current sessions. Turning it on monitors only sessions that are still connected."
+    },
+    "hostSampling": {
+      "title": "Host, CPU, memory, and network sampling",
+      "description": "Active session: every 2 seconds. Background session: every 15 seconds."
+    },
+    "processSampling": {
+      "title": "Process sampling",
+      "description": "Active session: every 2 seconds. Background session: every 15 seconds. Process CPU is calculated from successive samples."
+    },
+    "diskSampling": {
+      "title": "Disk sampling",
+      "description": "Disk data is sampled every 20 seconds."
+    },
+    "disconnect": {
+      "title": "Disconnected sessions",
+      "description": "Monitoring subscriptions stop when SSH disconnects, and old data is marked stale."
+    }
+  },
+  "aiPrivacy": {
+    "title": "AI and Privacy",
+    "description": "Read-only assistance never runs commands automatically. Terminal or file context is sent only after you select and preview each item.",
+    "provider": {
+      "title": "Model provider",
+      "description": "Only configured providers are shown. No simulated response is returned when a provider is missing.",
+      "button": "Open AI panel"
+    },
+    "context": {
+      "title": "Context sharing",
+      "description": "Terminal and file context are not attached automatically. Review and authorize each request."
+    },
+    "diagnostics": {
+      "title": "Diagnostic permissions",
+      "description": "Diagnostic tools use a fixed allowlist of read-only commands. You review and approve each step; log content cannot grant permissions."
+    },
+    "apiKey": {
+      "title": "API key",
+      "description": "Keys are stored in the system credential store. The interface only reads whether a key is configured and never fills it back in. Manage providers in the AI panel."
+    },
+    "history": {
+      "title": "Conversation history",
+      "description": "Conversation context is isolated by SSH session and cleared from runtime state when the session closes."
+    }
+  },
+  "appearance": {
+    "title": "Appearance and Shortcuts",
+    "description": "Change the application theme and workspace startup preferences without changing the existing split layout.",
+    "theme": {
+      "title": "Application theme",
+      "description": "Follow system tracks operating-system light and dark appearance changes."
+    },
+    "monitorSidebar": {
+      "title": "Server monitor sidebar",
+      "description": "Shows or hides the monitor area on the left without changing connection state or monitor data."
+    },
+    "aiPanel": {
+      "title": "Open AI panel by default",
+      "description": "Off by default. This only controls the initial state on the next launch; it does not affect the current session."
+    },
+    "density": {
+      "title": "Panel density",
+      "description": "The workspace keeps its compact desktop layout."
+    },
+    "shortcuts": {
+      "title": "Keyboard shortcuts",
+      "settings": "Settings",
+      "search": "Global search",
+      "newTab": "New tab",
+      "toggleAi": "Toggle AI panel",
+      "description": "Shortcuts can be viewed here. Editing shortcuts is not available in this version."
+    }
+  },
+  "aboutPanel": {
+    "title": "About {{name}}",
+    "description": "Product information and the running version.",
+    "iconAlt": "TermVista app icon",
+    "version": "Version",
+    "platform": "Platform",
+    "channel": "Release channel",
+    "buildHash": "Build identifier",
+    "updater": "Update service",
+    "updaterConfigured": "Configured",
+    "updaterChecking": "Checking configuration…",
+    "updaterUnavailable": "Unavailable",
+    "metadataUnavailable": "Unavailable",
+    "metadataError": "Could not read application information: {{error}}",
+    "copyDiagnostics": "Copy redacted diagnostics",
+    "diagnosticsCopied": "Redacted diagnostic information copied. It contains no host, account, path, key, or terminal content.",
+    "diagnosticsCopyFailed": "Could not copy diagnostic information. Check system clipboard permissions.",
+    "englishDescription": "A desktop SSH workspace",
+    "descriptionText": "A cross-platform remote workspace with SSH terminals, SFTP file management, server monitoring, and an AI Copilot.",
+    "tagline": "Your remote workspace, in one place."
+  },
+  "vault": {
+    "title": "Credential vault",
+    "unlockedKeychain": "Vault unlocked. The master key is protected by the system credential store. Passwords and private-key passphrases are encrypted with AES-256-GCM.",
+    "unlockedPassword": "Vault unlocked for this session with the master password. Passwords and private-key passphrases are encrypted with AES-256-GCM.",
+    "lockedPassword": "Vault is locked. Enter the master password before saved credentials can be used.",
+    "lockedKeychain": "Vault is locked. The system credential store can be checked again for the master key.",
+    "uninitialized": "After setup, credentials you choose to remember are encrypted on this device.",
+    "loading": "Loading local vault status…",
+    "useKeychain": "Use system credential store",
+    "useMasterPassword": "Use a master password",
+    "newPassword": "New vault master password",
+    "passwordMin": "Master password, at least 12 characters",
+    "confirmPassword": "Confirm vault master password",
+    "repeatPassword": "Enter the master password again",
+    "create": "Create vault",
+    "cancel": "Cancel",
+    "currentPassword": "Vault master password",
+    "enterPassword": "Enter the master password",
+    "unlock": "Unlock",
+    "unlockVault": "Unlock vault",
+    "lockNow": "Lock now",
+    "rotateKey": "Rotate master key and re-encrypt",
+    "changePassword": "Change master password and rotate",
+    "newPasswordMin": "New master password, at least 12 characters",
+    "confirmNewPassword": "Confirm new master password",
+    "repeatNewPassword": "Enter the new master password again",
+    "rotate": "Rotate and re-encrypt",
+    "mismatch": "The master passwords do not match.",
+    "newMismatch": "The new master passwords do not match.",
+    "confirmRotate": "Rotation re-encrypts all local credentials in the vault. Continue?",
+    "confirmKeychainRotate": "Rotation creates a new master key and re-encrypts all local credentials. Continue?",
+    "error": "Could not complete the vault operation.",
+    "retry": "Retry"
+  },
+  "keyManager": {
+    "title": "SSH keys",
+    "locked": "Unlock the vault to manage keys",
+    "count": "{{count}}",
+    "newName": "New key name",
+    "keyName": "Key name",
+    "keyType": "New key type",
+    "rsaLength": "RSA key length",
+    "rsa3072": "RSA 3072-bit",
+    "rsa4096": "RSA 4096-bit",
+    "generatePassphrase": "Private-key passphrase, at least 8 characters",
+    "generate": "Generate",
+    "passphraseStorage": "The private key is encrypted with a passphrase before it is stored in the local vault. Keep the passphrase safe.",
+    "importPrompt": "Choose an OpenSSH private key to import",
+    "chooseFile": "Choose file",
+    "importName": "Imported key name",
+    "importPassphrase": "Passphrase for the encrypted key (if any)",
+    "encryptImport": "Import encrypted key",
+    "loading": "Loading SSH keys…",
+    "empty": "No saved SSH keys.",
+    "createdAt": "Created {{date}}",
+    "usedBy": "Used by {{count}} connection(s)",
+    "unlinked": "Not linked to a connection",
+    "showPublic": "Show public key",
+    "copyPublicAria": "Copy public key for {{alias}}",
+    "copyPublicTitle": "Copy public key",
+    "exportPrivateAria": "Export private key for {{alias}}",
+    "exportTitle": "Export encrypted private key",
+    "deleteAria": "Delete key {{alias}}",
+    "deleteTitle": "Delete key",
+    "referenced": "Referenced by {{count}} connection(s)",
+    "exportSafety": "The export is encrypted with a new passphrase and created with permissions limited to the current user. Enter the current passphrase if the source key is encrypted. The destination file must not already exist.",
+    "currentPassphrase": "Current private-key passphrase",
+    "sourcePassphraseHint": "Current passphrase (if the source key is encrypted)",
+    "newExportPassphrase": "New export passphrase, at least 8 characters",
+    "confirmExportPassphrase": "Confirm export passphrase",
+    "repeatExportPassphrase": "Enter the new passphrase again",
+    "cancel": "Cancel",
+    "chooseExport": "Choose export location",
+    "passphraseMismatch": "The export passphrases do not match.",
+    "deleteConfirm": "Delete “{{alias}}” and its private key from the vault? This cannot be undone.",
+    "deleted": "Deleted key “{{alias}}”.",
+    "generated": "SSH key generated and encrypted in the local vault.",
+    "imported": "SSH private key verified and encrypted in the local vault.",
+    "exported": "SSH key exported with the new passphrase.",
+    "copyFailed": "Could not copy the SSH public key. Check system clipboard permissions.",
+    "error": "SSH key operation failed.",
+    "retry": "Retry"
+  }
+}

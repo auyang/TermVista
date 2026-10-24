@@ -1,0 +1,166 @@
+{
+  "title": "只读诊断",
+  "approveSteps": "批准诊断步骤",
+  "evidence": "证据",
+  "noChanges": "不会修改远程主机。",
+  "shareApproval": "批准向 AI 发送脱敏证据",
+  "panel": {
+    "errors": {
+      "loadTemplates": "读取诊断模板失败。",
+      "connectFirst": "请先连接 SSH，再创建诊断计划。",
+      "invalidPort": "请输入 1 到 65535 之间的端口号。",
+      "createPlan": "无法生成只读诊断计划。",
+      "start": "无法开始诊断。",
+      "cancel": "停止诊断失败。",
+      "reportPreview": "无法准备报告预览。",
+      "report": "未能生成诊断报告。",
+      "generic": "诊断操作失败。"
+    },
+    "readOnly": "只读诊断",
+    "diagnoseHost": "诊断当前服务器",
+    "statusRunning": "检查中",
+    "statusCompleted": "已完成",
+    "statusCancelled": "已取消",
+    "statusQueued": "待查看",
+    "collapse": "收起诊断入口",
+    "expand": "展开诊断入口",
+    "connectHint": "连接 SSH 后可以为当前服务器生成检查计划。",
+    "sessionGuard": "当前已连接会话 · 诊断前再次校验主机密钥",
+    "service": "服务名",
+    "port": "目标端口",
+    "templates": "一键诊断模板",
+    "intentLabel": "用自然语言描述问题",
+    "intentPlaceholder": "例如：为什么 Nginx 返回 502？",
+    "intentAria": "自然语言诊断问题",
+    "match": "匹配只读模板",
+    "matchLabel": "匹配：{{title}}",
+    "createMatched": "检查参数并生成计划",
+    "matchNote": "本地匹配到已有模板后仍需检查目标服务/端口及读取范围；生成计划不会启动远端检查。",
+    "results": "检查结果 · {{count}} 条证据",
+    "truncated": " · 有截断",
+    "cancel": "取消",
+    "chooseEvidence": "选择证据 {{id}} 用于 AI 报告",
+    "emptyOutput": "（无文本输出）",
+    "reportSafety": "未发送给 AI。生成模型报告会再次展示脱敏内容和发送目标，需单独确认；拒绝后不会发起模型请求。",
+    "addEvidence": "把所选证据加入对话",
+    "noProvider": "尚未配置模型",
+    "prepareReport": "预览并生成报告",
+    "preparing": "准备中…",
+    "needSavedKey": "请先配置并选择一个已保存 API Key 的模型服务商。",
+    "working": "正在处理…",
+    "shareTitle": "单独确认外发诊断证据",
+    "shareDescription": "读取服务器的授权不等于同意发送给模型。只有确认后才会发起 API 请求。",
+    "host": "SSH 主机",
+    "fingerprint": "主机指纹",
+    "destination": "发送目标",
+    "evidence": "证据",
+    "redactedPreview": " · 已脱敏预览",
+    "actualPayload": "实际发送内容",
+    "shareWarning": "远程日志和文件可能包含未识别的秘密或恶意提示。请检查实际内容与服务商；报告只分析当前所选证据，不会触发新检查或自动修复。",
+    "decline": "拒绝外发",
+    "sending": "正在发送…",
+    "approveReport": "单独授权并生成报告",
+    "cancelPlan": "取消计划",
+    "startCheck": "开始只读检查",
+    "planTitle": "检查计划",
+    "target": "目标 {{host}}:{{port}} · {{username}}",
+    "verifiedFingerprint": "已验证指纹 {{fingerprint}}",
+    "allowStep": "允许 {{title}}",
+    "maxOutput": "最多 {{size}} KiB",
+    "readScope": "读取：{{scope}}",
+    "sensitiveData": "敏感信息：{{value}}",
+    "planSafety": "远程内容只作为不可信证据；此项授权只允许当前计划的只读检查，不会发送到模型或执行修复。",
+    "contextAuthorized": "此计划包含你选定的上下文，仅用于只读分析。",
+    "noChanges": "不会修改远程主机。"
+  },
+  "templates": {
+    "nginx502": {
+      "title": "Nginx 502",
+      "description": "检查 nginx 服务、近期日志、监听端口和主机资源。"
+    },
+    "serviceFailed": {
+      "title": "服务无法启动",
+      "description": "查看指定 systemd 服务状态、近期日志和进程列表。"
+    },
+    "diskLow": {
+      "title": "磁盘空间不足",
+      "description": "检查真实文件系统、内存和负载信息。"
+    },
+    "highCpu": {
+      "title": "CPU 负载高",
+      "description": "读取当前资源快照和 CPU 占用靠前的进程。"
+    },
+    "portUnbound": {
+      "title": "端口未监听",
+      "description": "检查指定 TCP/UDP 端口是否处于监听状态。"
+    },
+    "currentHost": {
+      "title": "诊断当前服务器",
+      "description": "查看系统信息、资源、进程和监听端口。"
+    }
+  },
+  "steps": {
+    "systemInfo": {
+      "title": "系统信息",
+      "why": "识别系统类型、主机名、运行时间和负载。",
+      "sensitive": "主机名可能属于敏感基础设施信息。",
+      "scope": "uname、hostname、uptime"
+    },
+    "resourceSnapshot": {
+      "title": "资源快照",
+      "why": "查看内存、负载和文件系统使用情况；优先复用当前监控快照。",
+      "sensitive": "挂载点名称可能暴露目录结构。",
+      "scope": "监控快照，或 /proc/meminfo、/proc/loadavg、df -P -k"
+    },
+    "processList": {
+      "title": "进程列表",
+      "why": "查看资源占用靠前的进程，不读取环境变量或完整命令行。",
+      "sensitive": "进程名和 PID 可能暴露运行服务。",
+      "scope": "按 {{sort}} 排序，最多 {{count}} 个进程"
+    },
+    "serviceInspect": {
+      "title": "服务状态",
+      "why": "只读取指定 systemd 服务的状态字段。",
+      "sensitive": "服务名与启动状态可能属于敏感运维信息。",
+      "scope": "systemctl show：{{service}}"
+    },
+    "listeningPorts": {
+      "title": "监听端口",
+      "why": "枚举监听套接字；不读取进程详情，不需要 sudo。",
+      "sensitive": "监听地址和端口可能属于敏感网络信息。",
+      "scope": "{{protocol}} 监听端口，目标端口 {{port}}",
+      "scopeMany": "最多 {{count}} 条 {{protocol}} 监听项"
+    },
+    "recentLogs": {
+      "title": "近期日志",
+      "why": "读取该服务最新的有限行数，日志内容按不可信数据处理。",
+      "sensitive": "日志可能含账号、路径或令牌；外发前将进行脱敏和人工预览。",
+      "scope": "journalctl：{{service}} 最近 {{count}} 行"
+    },
+    "fileExcerpt": {
+      "title": "SFTP 文件摘录",
+      "why": "仅读取你刚才从 SFTP 选择的普通文本文件。",
+      "sensitive": "文件内容可能含机密；外发必须再次单独确认。",
+      "scope": "{{path}}，最多 {{size}} KiB"
+    },
+    "terminalSelection": {
+      "title": "终端选区",
+      "why": "仅使用用户明确选中的终端文本，不读取终端历史缓冲区。",
+      "sensitive": "选区作为不可信引用数据；发送模型前会单独预览。",
+      "scope": "用户选中的文本，共 {{count}} 字节（最多 16 KiB）"
+    }
+  },
+  "statuses": {
+    "queued": "排队中",
+    "running": "运行中",
+    "completed": "已完成",
+    "cancelled": "已取消",
+    "failed": "失败",
+    "success": "成功",
+    "unsupported": "不支持",
+    "permissionDenied": "权限不足",
+    "timeout": "超时",
+    "notRun": "未运行",
+    "error": "错误"
+  }
+}

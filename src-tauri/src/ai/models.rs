@@ -128,6 +128,12 @@ pub struct ContextPreviewRequest {
     pub include_history: bool,
     #[serde(default)]
     pub mode: AiTaskMode,
+    #[serde(default = "default_ui_language")]
+    pub ui_language: String,
+}
+
+fn default_ui_language() -> String {
+    "en-US".to_owned()
 }
 
 #[derive(Clone, Debug, Serialize)]

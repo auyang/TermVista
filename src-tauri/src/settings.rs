@@ -76,6 +76,7 @@ pub struct AppearanceSettings {
     pub theme_mode: String,
     pub show_monitor_sidebar: bool,
     pub ai_panel_open_by_default: bool,
+    pub language_preference: String,
 }
 
 impl Default for AppearanceSettings {
@@ -84,6 +85,7 @@ impl Default for AppearanceSettings {
             theme_mode: "system".to_owned(),
             show_monitor_sidebar: true,
             ai_panel_open_by_default: false,
+            language_preference: "system".to_owned(),
         }
     }
 }
@@ -147,6 +149,9 @@ impl PublicSettings {
             "system" | "light" | "dark"
         ) {
             return Err("应用主题无效。".to_owned());
+        }
+        if !is_supported_language_preference(&self.appearance.language_preference) {
+            return Err("界面语言设置无效。".to_owned());
         }
         self.schema_version
             .eq(&1)
@@ -324,11 +329,46 @@ fn read_settings(profiles: &ConnectionProfilesStore) -> Result<PublicSettings, S
     let Some((data, revision)) = profiles.get_settings_record()? else {
         return Ok(PublicSettings::default());
     };
+    parse_settings_record(&data, revision)
+}
+
+fn parse_settings_record(data: &str, revision: u64) -> Result<PublicSettings, String> {
+    let mut value: Value =
+        serde_json::from_str(data).map_err(|error| format!("设置数据无法读取：{error}"))?;
+    let root = value
+        .as_object_mut()
+        .ok_or_else(|| "设置数据格式错误。".to_owned())?;
+    let appearance = root
+        .entry("appearance")
+        .or_insert_with(|| Value::Object(Map::new()))
+        .as_object_mut()
+        .ok_or_else(|| "外观设置数据格式错误。".to_owned())?;
+    match appearance.get("languagePreference") {
+        None => {
+            // 既有设置记录默认使用简体中文，避免升级后改变老用户的界面语言。
+            appearance.insert(
+                "languagePreference".to_owned(),
+                Value::String("zh-CN".to_owned()),
+            );
+        }
+        Some(Value::String(language)) if is_supported_language_preference(language) => {}
+        Some(_) => {
+            // 无效语言值只回退语言字段，其他设置保持原样。
+            appearance.insert(
+                "languagePreference".to_owned(),
+                Value::String("en-US".to_owned()),
+            );
+        }
+    }
     let mut settings: PublicSettings =
-        serde_json::from_str(&data).map_err(|error| format!("设置数据无法读取：{error}"))?;
+        serde_json::from_value(value).map_err(|error| format!("设置数据无法读取：{error}"))?;
     settings.revision = revision;
     settings.validate()?;
     Ok(settings)
+}
+
+fn is_supported_language_preference(language: &str) -> bool {
+    matches!(language, "system" | "en-US" | "zh-CN" | "ja-JP" | "zh-TW")
 }
 
 fn merge_object(target: &mut Map<String, Value>, patch: &Map<String, Value>) {
@@ -360,7 +400,9 @@ fn platform_name(os: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{PublicSettings, merge_object, platform_name, updater_config_status};
+    use super::{
+        PublicSettings, merge_object, parse_settings_record, platform_name, updater_config_status,
+    };
     use serde_json::{Value, json};
 
     #[test]
@@ -371,6 +413,7 @@ mod tests {
         assert!(!settings.connections.auto_reconnect_enabled);
         assert!(settings.terminal.paste_preview);
         assert!(!settings.appearance.ai_panel_open_by_default);
+        assert_eq!(settings.appearance.language_preference, "system");
     }
 
     #[test]
@@ -393,6 +436,41 @@ mod tests {
         assert_eq!(settings.terminal, super::TerminalSettings::default());
         assert!(settings.monitoring.enabled);
         assert!(settings.general.auto_check_updates);
+    }
+
+    #[test]
+    fn stored_settings_without_a_language_keep_legacy_simplified_chinese() {
+        let settings = parse_settings_record(
+            r#"{"schemaVersion":1,"revision":4,"appearance":{"themeMode":"dark"}}"#,
+            4,
+        )
+        .unwrap();
+        assert_eq!(settings.appearance.language_preference, "zh-CN");
+        assert_eq!(settings.appearance.theme_mode, "dark");
+        assert!(settings.appearance.show_monitor_sidebar);
+    }
+
+    #[test]
+    fn stored_settings_preserve_valid_language_preferences() {
+        let settings = parse_settings_record(
+            r#"{"schemaVersion":1,"revision":9,"appearance":{"languagePreference":"ja-JP"}}"#,
+            9,
+        )
+        .unwrap();
+        assert_eq!(settings.appearance.language_preference, "ja-JP");
+        assert_eq!(settings.revision, 9);
+    }
+
+    #[test]
+    fn invalid_stored_language_falls_back_without_losing_other_settings() {
+        let settings = parse_settings_record(
+            r#"{"schemaVersion":1,"revision":3,"appearance":{"themeMode":"light","languagePreference":"fr-FR"},"general":{"rememberRecentConnections":false}}"#,
+            3,
+        )
+        .unwrap();
+        assert_eq!(settings.appearance.language_preference, "en-US");
+        assert_eq!(settings.appearance.theme_mode, "light");
+        assert!(!settings.general.remember_recent_connections);
     }
 
     #[test]

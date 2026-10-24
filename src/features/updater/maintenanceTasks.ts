@@ -2,9 +2,15 @@ import { create } from "zustand";
 
 export type UpdateMaintenanceTask = {
   id: string;
-  label: string;
+  label: MaintenanceTaskKey;
   startedAt: number;
 };
+
+export type MaintenanceTaskKey =
+  | "sftpCreateDirectory" | "sftpRename" | "sftpDelete" | "sftpTransfer"
+  | "aiTestProvider" | "aiReadModels" | "vaultUpdate"
+  | "sshKeyGenerate" | "sshKeyImport" | "sshKeyExport" | "sshKeyDelete"
+  | "tunnelSave" | "tunnelDelete" | "tunnelStart" | "tunnelStop";
 
 type UpdateMaintenanceTaskState = {
   tasks: UpdateMaintenanceTask[];
@@ -23,7 +29,7 @@ export const useUpdateMaintenanceTaskStore = create<UpdateMaintenanceTaskState>(
 let nextTaskId = 0;
 
 export async function runWithUpdateMaintenanceTask<T>(
-  label: string,
+  label: MaintenanceTaskKey,
   operation: () => Promise<T>,
 ): Promise<T> {
   nextTaskId += 1;

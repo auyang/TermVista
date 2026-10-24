@@ -1,0 +1,86 @@
+{
+  "title": "クイック接続",
+  "subtitle": "ダブルクリックで接続し、ターミナルを開くかファイルを表示",
+  "manageConnections": "接続を管理",
+  "loading": {
+    "aria": "サーバープロファイルを読み込み中",
+    "screenReader": "ローカルのサーバープロファイルを読み込み中"
+  },
+  "loadError": {
+    "title": "ローカルの接続設定を読み込めません",
+    "description": "設定データベースを一時的に利用できません。保存済みの接続は保持されています。再試行してください。",
+    "retry": "再試行"
+  },
+  "empty": {
+    "title": "サーバー接続がありません",
+    "description": "SSH 接続設定を追加するとここに表示されます。ログインパスワードと秘密鍵のパスフレーズはローカルの暗号化ボルトで保護できます。",
+    "addSsh": "SSH 接続を追加"
+  },
+  "filter": {
+    "aria": "接続を絞り込む",
+    "all": "すべて",
+    "favorites": "お気に入り",
+    "recent": "最近"
+  },
+  "batch": {
+    "connectCount": "選択項目に接続（{{count}}）",
+    "paused": "一括接続を一時停止しました。{{name}} のログイン確認を完了してから、残りの接続を再開してください。",
+    "completed": "{{count}} 台のサーバーを処理しました。",
+    "title": "複数のサーバーに接続しますか？",
+    "description": "次の {{count}} 台を順番に処理します。ホスト鍵と認証情報は各サーバーで個別に確認します。ログイン操作が必要な場合、一括接続は一時停止します。",
+    "start": "接続を開始",
+    "maxSelected": "同時に選択できるのは 3 台まで"
+  },
+  "search": {
+    "placeholder": "名前、ホスト、ユーザーを検索",
+    "aria": "接続を検索"
+  },
+  "emptyFiltered": "条件に一致するサーバーはありません。",
+  "table": {
+    "select": "選択",
+    "name": "接続名",
+    "lastPath": "前回のパス",
+    "user": "ユーザー",
+    "actions": "操作"
+  },
+  "actions": {
+    "more": "その他の操作",
+    "connect": "接続",
+    "connectNew": "新しいセッションで接続",
+    "openSftp": "SFTP を開く",
+    "edit": "編集",
+    "favorite": "お気に入りに追加",
+    "unfavorite": "お気に入りから削除",
+    "copyHost": "ホストアドレスをコピー",
+    "delete": "プロファイルを削除…",
+    "selected": "一括接続に {{name}} を選択",
+    "isFavorite": "お気に入り",
+    "lastPathNotRecorded": "リモートパスの記録なし"
+  },
+  "status": {
+    "connected": "接続済み",
+    "connecting": "接続中"
+  },
+  "footer": {
+    "savedCount": "保存済みサーバー {{count}} 台",
+    "usage": "ダブルクリックまたは Enter で接続 · 右クリックで操作",
+    "clearRecent": "最近の履歴を消去"
+  },
+  "delete": {
+    "title": "この接続設定を削除しますか？",
+    "description": "{{name}} のローカル接続設定を削除します。システムに保存された認証情報とホスト鍵の信頼記録は削除されません。",
+    "activeSession": "現在の SSH セッションは継続します。タブを閉じると、この設定は自動復元されません。",
+    "cancel": "キャンセル",
+    "confirm": "接続設定を削除"
+  },
+  "toast": {
+    "favoriteSaveFailed": "お気に入りを更新できませんでした。",
+    "deleteFailed": "サーバー設定を削除できませんでした。",
+    "hostCopied": "{{host}} をコピーしました",
+    "clipboardUnavailable": "クリップボードを利用できません。ホストアドレスを手動でコピーしてください。",
+    "recentCleared": "最近の接続時刻を消去しました。接続設定と認証情報は保持されています。",
+    "recentClearFailed": "最近の接続履歴を消去できませんでした。",
+    "batchPaused": "一括接続を一時停止しました。{{name}} のログイン確認を完了してから、残りの接続を再開してください。",
+    "batchCompleted": "{{count}} 台のサーバーを処理しました。"
+  }
+}

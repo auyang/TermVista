@@ -48,6 +48,7 @@ export type AiPreviewRequest = {
   sources: AiContextSource[];
   includeHistory: boolean;
   mode: AiTaskMode;
+  uiLanguage: string;
 };
 
 export type AiContextSourcePreview = {

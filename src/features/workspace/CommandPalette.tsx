@@ -3,8 +3,11 @@ import { Activity, ArrowRight, Folder, Plus, Search, Server, Sparkles, TerminalS
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { connectProfile } from "@/features/ssh/sshBridge";
+import { isDefaultUngroupedGroup } from "@/features/connections/profileTree";
 import { statusLabel, useSshSessionStore } from "@/stores/sshSessionStore";
 import { useWorkspaceStore, type ConnectionProfile, type WorkspaceTab } from "@/stores/workspaceStore";
+import { useTranslation } from "react-i18next";
+import { getWorkspaceTabDisplayTitle } from "@/features/workspace/tabTitle";
 
 type PaletteItem = {
   id: string;
@@ -30,9 +33,9 @@ function connectOrFocus(profile: ConnectionProfile) {
   void connectProfile(profile, tab.id);
 }
 
-function tabDescription(tab: WorkspaceTab) {
+function tabDescription(tab: WorkspaceTab, labels: { reconnectPending: string; quickHome: string; demoLayout: string }) {
   const session = tab.mode === "ssh" ? useSshSessionStore.getState().sessions[tab.id] : undefined;
-  return tab.mode === "ssh" ? `${tab.host ?? "SSH"} · ${session ? statusLabel(session.state) : "待重连"}` : tab.mode === "blank" ? "快速连接首页" : "演示布局";
+  return tab.mode === "ssh" ? `${tab.host ?? "SSH"} · ${session ? statusLabel(session.state) : labels.reconnectPending}` : tab.mode === "blank" ? labels.quickHome : labels.demoLayout;
 }
 
 function focusSftpPath(tab: WorkspaceTab) {
@@ -45,6 +48,7 @@ function focusSftpPath(tab: WorkspaceTab) {
 }
 
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation("workspace");
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const profiles = useWorkspaceStore((state) => state.profiles);
@@ -56,22 +60,25 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const items = useMemo<PaletteItem[]>(() => {
     const profileItems = profiles.map((profile) => ({
       id: `profile:${profile.id}`,
-      group: profile.favorite ? "收藏服务器" : profile.lastConnectedAt ? "最近连接" : "服务器",
+      group: profile.favorite ? t("favorites") : profile.lastConnectedAt ? t("recent") : t("servers"),
       label: profile.name,
-      detail: `${profile.username || "未设置用户"}@${profile.host}:${profile.port || 22}${profile.group ? ` · ${profile.group}` : ""}`,
-      keywords: `${profile.name} ${profile.host} ${profile.username} ${profile.group} ${profile.environment}`,
+      detail: `${profile.username || t("unsetUser")}@${profile.host}:${profile.port || 22}${profile.group ? ` · ${isDefaultUngroupedGroup(profile.group) ? t("ungrouped") : profile.group}` : ""}`,
+      keywords: `${profile.name} ${profile.host} ${profile.username} ${profile.group} ${t("ungrouped")} ${profile.environment}`,
       icon: Server,
       run: () => connectOrFocus(profile),
     }));
-    const tabItems = tabs.map((tab) => ({
-      id: `tab:${tab.id}`,
-      group: "已打开标签",
-      label: tab.title,
-      detail: tabDescription(tab),
-      keywords: `${tab.title} ${tab.host ?? ""}`,
-      icon: tab.mode === "ssh" ? TerminalSquare : Folder,
-      run: () => useWorkspaceStore.getState().activateTab(tab.id),
-    }));
+    const tabItems = tabs.map((tab) => {
+      const tabTitle = getWorkspaceTabDisplayTitle(tab, t("newTab"));
+      return {
+        id: `tab:${tab.id}`,
+        group: t("openTabs"),
+        label: tabTitle,
+        detail: tabDescription(tab, { reconnectPending: t("reconnectPending"), quickHome: t("quickHome"), demoLayout: t("demoLayout") }),
+        keywords: `${tabTitle} ${tab.host ?? ""}`,
+        icon: tab.mode === "ssh" ? TerminalSquare : Folder,
+        run: () => useWorkspaceStore.getState().activateTab(tab.id),
+      };
+    });
     const currentTab = tabs.find((tab) => tab.id === activeTabId);
     const currentSession = currentTab?.mode === "ssh"
       ? activeSession
@@ -79,44 +86,44 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     const actions: PaletteItem[] = [
       {
         id: "action:connections",
-        group: "常用操作",
-        label: "管理连接",
-        detail: "新增、编辑或管理可信主机",
-        keywords: "连接管理器 新建服务器 trusted hosts",
+        group: t("commonActions"),
+        label: t("manageConnections"),
+        detail: t("manageConnectionsDetail"),
+        keywords: `${t("manageConnections")} ${t("connectionManager")} server trusted hosts`,
         icon: Folder,
         run: () => useWorkspaceStore.getState().setManagerOpen(true),
       },
       {
         id: "action:new-tab",
-        group: "常用操作",
-        label: "新建标签页",
-        detail: "打开快速连接首页",
-        keywords: "新建 tab home",
+        group: t("commonActions"),
+        label: t("newTabAction"),
+        detail: t("newTabDetail"),
+        keywords: `${t("newTab")} tab home`,
         icon: Plus,
         run: () => useWorkspaceStore.getState().addBlankTab(),
       },
       {
         id: "action:sftp-path",
-        group: "常用操作",
-        label: "定位当前 SFTP 路径",
-        detail: currentSession?.state === "connected" ? `${currentTab?.title ?? "当前服务器"} · 聚焦远程路径输入框` : "连接 SSH 后可用",
-        keywords: "文件 目录 路径 sftp remote path",
+        group: t("commonActions"),
+        label: t("focusSftp"),
+        detail: currentSession?.state === "connected" ? `${currentTab ? getWorkspaceTabDisplayTitle(currentTab, t("newTab")) : t("currentServer")} · ${t("focusSftpDetail")}` : t("connectToUse"),
+        keywords: `${t("focusSftp")} ${t("focusSftpDetail")} sftp remote path`,
         icon: Folder,
         disabled: currentSession?.state !== "connected" || !currentSession.sessionId,
         run: () => currentTab && focusSftpPath(currentTab),
       },
       {
         id: "action:ai",
-        group: "常用操作",
-        label: aiOpen ? "关闭 AI 助手" : "打开 AI 助手",
-        detail: "AI 建议仍需检查和确认，不会自动执行命令",
-        keywords: "ai copilot 助手",
+        group: t("commonActions"),
+        label: aiOpen ? t("aiActionClose") : t("aiActionOpen"),
+        detail: t("aiDetail"),
+        keywords: `${t("aiActionOpen")} AI copilot`,
         icon: Activity,
         run: () => useWorkspaceStore.getState().toggleAi(),
       },
     ];
     return [...profileItems, ...tabItems, ...actions];
-  }, [activeSession, activeTabId, aiOpen, profiles, tabs]);
+  }, [activeSession, activeTabId, aiOpen, profiles, tabs, t]);
 
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filtered = items.filter((item) => !normalizedQuery || `${item.label} ${item.detail} ${item.keywords}`.toLocaleLowerCase().includes(normalizedQuery));
@@ -155,18 +162,18 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="top-[18%] w-[min(600px,calc(100vw-24px))] translate-y-0 gap-0 p-0 shadow-2xl">
-        <DialogTitle className="sr-only">快捷搜索与操作</DialogTitle>
-        <DialogDescription className="sr-only">搜索服务器、切换标签或打开常用操作。方向键浏览，Enter 执行，Esc 关闭。</DialogDescription>
+        <DialogTitle className="sr-only">{t("paletteTitle")}</DialogTitle>
+        <DialogDescription className="sr-only">{t("paletteDescription")}</DialogDescription>
         <div className="flex h-11 items-center gap-2 border-b border-border px-3">
           <Search size={15} className="shrink-0 text-muted-foreground" aria-hidden="true" />
           <Input
             autoFocus
             role="combobox"
-            aria-label="搜索服务器、标签和操作"
+            aria-label={t("searchLabel")}
             aria-expanded="true"
             aria-controls="command-palette-results"
             aria-activedescendant={visible[activeIndex] ? `command-palette-option-${activeIndex}` : undefined}
-            placeholder="搜索服务器、切换标签或输入操作…"
+            placeholder={t("searchPlaceholder")}
             className="h-9 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
             value={query}
             onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }}
@@ -174,8 +181,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           />
           <kbd className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">Esc</kbd>
         </div>
-        <div id="command-palette-results" role="listbox" aria-label="搜索结果" className="compact-scrollbar max-h-[min(62vh,520px)] overflow-auto p-1.5">
-          {visible.length === 0 ? <div className="px-3 py-8 text-center text-xs text-muted-foreground">没有匹配的服务器、标签或操作。</div> : groups.map((group) => {
+        <div id="command-palette-results" role="listbox" aria-label={t("searchResults")} className="compact-scrollbar max-h-[min(62vh,520px)] overflow-auto p-1.5">
+          {visible.length === 0 ? <div className="px-3 py-8 text-center text-xs text-muted-foreground">{t("noMatches")}</div> : groups.map((group) => {
             const groupItems = visible.filter((item) => item.group === group);
             return <section key={group} aria-label={group}>
               <h3 className="px-2 pb-1 pt-2 text-[10px] font-medium text-muted-foreground">{group}</h3>
@@ -206,8 +213,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           })}
         </div>
         <footer className="flex h-8 items-center justify-between border-t border-border px-3 text-[10px] text-muted-foreground">
-          <span>连接会复用可信指纹和现有身份验证流程</span>
-          <span className="flex items-center gap-1"><Sparkles size={11} />↑↓ 浏览 <kbd className="rounded border border-border px-1">↵</kbd> 执行</span>
+          <span>{t("trustReuse")}</span>
+          <span className="flex items-center gap-1"><Sparkles size={11} />↑↓ {t("browse")} <kbd className="rounded border border-border px-1">↵</kbd> {t("run")}</span>
         </footer>
       </DialogContent>
     </Dialog>

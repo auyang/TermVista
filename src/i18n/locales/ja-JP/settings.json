@@ -1,0 +1,380 @@
+{
+  "title": "設定",
+  "about": "TermVista について",
+  "interfaceLanguage": "インターフェースの言語",
+  "systemLanguage": "システムの言語に合わせる",
+  "systemLanguageResolved": "現在のシステム言語：{{language}}",
+  "saveFailed": "言語設定を保存できませんでした。{{language}}に戻しました。",
+  "restartNotRequired": "変更はすぐに反映されます。",
+  "nav": {
+    "general": "一般",
+    "terminal": "ターミナル",
+    "connections": "接続とセキュリティ",
+    "sftp": "ファイル転送",
+    "monitoring": "サーバー監視",
+    "aiPrivacy": "AI とプライバシー",
+    "appearance": "外観とショートカット",
+    "about": "TermVista について"
+  },
+  "dialog": {
+    "description": "アプリの設定とセキュリティオプションを管理します。SSH 認証情報はローカルの暗号化保管庫で保護されます。",
+    "categories": "設定カテゴリ",
+    "resetConfirm": "{{section}}の設定を初期値に戻しますか？設定のみが変更されます。",
+    "reset": "{{section}}を初期値に戻す",
+    "close": "閉じる",
+    "saveError": "設定を保存できませんでした。以前の値を表示しています：{{error}}"
+  },
+  "row": {
+    "state": "現在：{{value}} · 適用：{{timing}}",
+    "stateWithDefault": "現在：{{value}} · 初期値：{{defaultValue}} · 適用：{{timing}}"
+  },
+  "values": {
+    "on": "オン",
+    "off": "オフ",
+    "paused": "一時停止中",
+    "immediately": "すぐに",
+    "nextLaunch": "次回の起動時",
+    "newTerminal": "新しいターミナル",
+    "currentVersion": "現在のバージョン",
+    "eachConnection": "接続ごと",
+    "eachTask": "タスクごと",
+    "eachDownload": "ダウンロードごと",
+    "eachRequest": "リクエストごと",
+    "eachProvider": "プロバイダーごと",
+    "currentSession": "現在のセッション",
+    "followSystem": "システムに合わせる",
+    "light": "ライト",
+    "dark": "ダーク",
+    "show": "表示",
+    "hide": "非表示",
+    "expanded": "展開",
+    "compact": "コンパクト",
+    "quickConnect": "クイック接続",
+    "notAvailable": "利用できません",
+    "enabled": "有効",
+    "enforced": "常に有効",
+    "ask": "毎回確認",
+    "onePerSession": "セッションごとに1回",
+    "orderedQueue": "順番に処理",
+    "confirmEach": "操作ごとに確認",
+    "systemPicker": "システムのファイル選択ダイアログ",
+    "readOnlyAllowlist": "読み取り専用コマンドの許可リスト",
+    "sessionIsolated": "セッションごとに分離",
+    "byProvider": "プロバイダーごとに管理",
+    "enginePolicy": "エンジンのポリシー",
+    "engineDefault": "エンジンの既定値",
+    "currentConnections": "接続時に読み込み",
+    "permissionEachTime": "毎回許可を確認",
+    "notConfigured": "未設定",
+    "openAiPanel": "AI パネルを開いたとき",
+    "lines": "行"
+  },
+  "loading": {
+    "reading": "設定を読み込み中…",
+    "notLoaded": "設定が読み込まれていません。"
+  },
+  "toggle": {
+    "on": "オン",
+    "off": "オフ"
+  },
+  "general": {
+    "title": "一般",
+    "description": "ワークスペースの復元とローカルの接続履歴を管理します。ウィンドウを再起動しても、SSH セッション、PTY、リモートプロセスは再開されません。",
+    "restoreWorkspace": {
+      "title": "タブとワークスペースを復元",
+      "description": "ローカルのタブ、パネル配置、最後に使用した SFTP パスのみを復元します。リモートプロセスは復元されません。"
+    },
+    "autoConnect": {
+      "title": "復元したサーバータブに再接続",
+      "description": "前回のワークスペースにあった SSH タブのみが対象です。初回のホスト鍵確認、認証情報がない場合、ログイン確認は通常のセキュリティ手順に従います。"
+    },
+    "recentConnections": {
+      "title": "最近の接続を保存",
+      "description": "無効にすると、新しい接続履歴の日時は記録されません。既存の接続設定、お気に入り、認証情報、信頼済みフィンガープリントは保持されます。"
+    },
+    "checkUpdates": {
+      "title": "起動時にアップデートを確認",
+      "description": "起動後にバックグラウンドで確認します。アップデートが見つかると通知が表示されますが、自動ダウンロードや自動インストールは行いません。"
+    },
+    "newTab": {
+      "title": "新しいタブ",
+      "description": "新しいタブではクイック接続ホームを開きます。"
+    }
+  },
+  "terminal": {
+    "title": "ターミナル",
+    "description": "フォントサイズとカーソルの変更は、開いている SSH ターミナルにすぐ反映されます。スクロールバックの行数には上限があります。",
+    "fontSize": {
+      "title": "ターミナルのフォントサイズ",
+      "description": "11～24 px の範囲です。現在のセッションで変更をすぐに確認できます。"
+    },
+    "font": {
+      "title": "フォント",
+      "description": "システムの等幅フォント候補リストを使用します。"
+    },
+    "lineHeight": {
+      "title": "行の高さ",
+      "description": "xterm.js の行の高さです。倍率は 1.0～2.0 です。"
+    },
+    "cursorStyle": {
+      "title": "カーソルの形",
+      "description": "ターミナルで使用するカーソルの形です。",
+      "block": "ブロック",
+      "underline": "下線",
+      "bar": "縦線"
+    },
+    "cursorBlink": {
+      "title": "カーソルの点滅",
+      "description": "現在のターミナルでカーソルを点滅させるか設定します。"
+    },
+    "colorScheme": {
+      "title": "ターミナルの配色",
+      "description": "ターミナルは常にダーク表示です。「テーマに合わせる」を選ぶと、アプリのテーマに応じたターミナル配色になります。",
+      "follow": "テーマに合わせる",
+      "dark": "ダークターミナル"
+    },
+    "scrollback": {
+      "title": "スクロールバックの上限",
+      "description": "各ターミナルに保持する過去の行数を制限します。セッションの出力は保存されません。"
+    },
+    "pastePreview": {
+      "title": "複数行貼り付けを確認",
+      "description": "複数行の内容や制御文字を事前に確認できます。上限を超える内容や切断中の貼り付けは、引き続きセキュリティチェックでブロックされます。"
+    },
+    "clearHistory": {
+      "title": "画面とスクロールバックを個別に消去",
+      "description": "ターミナル制御シーケンスでは、画面とスクロールバックを個別に消去できます。この画面では、セッション状態を失うおそれのある操作を一つにまとめていません。"
+    }
+  },
+  "connections": {
+    "title": "接続とセキュリティ",
+    "description": "ホストの本人確認は常に有効です。自動再接続には、全体設定と接続ごとの設定の両方、および利用可能なローカル認証情報が必要です。",
+    "autoReconnect": {
+      "title": "自動再接続を許可",
+      "description": "指数バックオフで最大5回再試行します。各サーバーでも有効にする必要があります。ホスト鍵が変更された場合、再試行は直ちに停止します。"
+    },
+    "hostKey": {
+      "title": "SSH ホスト鍵の検証",
+      "description": "初回接続時に、今回のセッションのみ信頼するか、永続的に保存するかを選択します。信頼済みの鍵が変更されると接続をブロックします。"
+    },
+    "trustedHosts": {
+      "title": "信頼済みホストとフィンガープリント",
+      "description": "各ホストの鍵アルゴリズム、SHA256 フィンガープリント、信頼した日時を確認できます。登録を取り消すと、次回接続時に再確認が必要です。",
+      "button": "信頼済みホストを表示"
+    },
+    "timeout": {
+      "title": "SSH タイムアウト",
+      "description": "現在の SSH エンジンのタイムアウトポリシーを使用します。このバージョンでは個別のタイムアウト設定はありません。"
+    },
+    "credentials": {
+      "title": "保存済みログイン認証情報",
+      "description": "パスワードと秘密鍵のパスフレーズは、ローカルの暗号化保管庫で保護されます。設定画面やステータス画面が秘密情報を読み取ったり返したりすることはありません。",
+      "button": "接続マネージャーを開く"
+    }
+  },
+  "sftp": {
+    "title": "ファイル転送",
+    "description": "現在実装されている転送時の安全ポリシーを表示します。バックエンドと連携していない設定項目の操作は表示しません。",
+    "concurrency": {
+      "title": "同時転送数",
+      "description": "同じ SSH セッションで転送を順番に実行し、転送先への同時書き込みを防ぎます。"
+    },
+    "conflicts": {
+      "title": "同名ファイルの競合",
+      "description": "転送先に同名ファイルがある場合、現在のキューに対してスキップ、両方を保存、上書きのいずれかを選択します。"
+    },
+    "delete": {
+      "title": "リモートファイルの削除を確認",
+      "description": "削除対象を表示し、削除前に確認を求めます。"
+    },
+    "downloadLocation": {
+      "title": "ローカルのダウンロード先",
+      "description": "ダウンロードごとにシステムのファイル選択ダイアログで保存先を選びます。固定の保存先は記録されません。"
+    },
+    "editorConflict": {
+      "title": "リモート編集時の競合チェック",
+      "description": "このバージョンには独立したリモートテキストエディターがないため、更新日時の個別設定はありません。"
+    }
+  },
+  "monitoring": {
+    "title": "サーバー監視",
+    "description": "監視データはアクティブな SSH セッションからのみ取得します。一時停止するとバックグラウンドのサンプリングを停止し、デモ用の数値は表示しません。",
+    "enabled": {
+      "title": "現在の接続を監視",
+      "description": "無効にすると、すべての現在のセッションでサンプリングを停止します。有効にすると、接続中のセッションのみ監視します。"
+    },
+    "hostSampling": {
+      "title": "ホスト、CPU、メモリ、ネットワークのサンプリング",
+      "description": "アクティブなセッション：2秒ごと。バックグラウンドのセッション：15秒ごと。"
+    },
+    "processSampling": {
+      "title": "プロセスのサンプリング",
+      "description": "アクティブなセッション：2秒ごと。バックグラウンドのセッション：15秒ごと。プロセスの CPU 使用率は連続するサンプルから算出します。"
+    },
+    "diskSampling": {
+      "title": "ディスクのサンプリング",
+      "description": "ディスク情報は20秒ごとに取得します。"
+    },
+    "disconnect": {
+      "title": "切断されたセッション",
+      "description": "SSH が切断されると監視の購読を停止し、以前のデータは古いデータとして表示します。"
+    }
+  },
+  "aiPrivacy": {
+    "title": "AI とプライバシー",
+    "description": "読み取り専用のアシスタントがコマンドを自動実行することはありません。ターミナルやファイルの情報は、項目ごとに選択してプレビューした後にのみ送信されます。",
+    "provider": {
+      "title": "モデルプロバイダー",
+      "description": "設定済みのプロバイダーのみ表示します。プロバイダーが未設定の場合、模擬応答は返しません。",
+      "button": "AI パネルを開く"
+    },
+    "context": {
+      "title": "コンテキストの共有",
+      "description": "ターミナルやファイルの内容を自動で添付することはありません。リクエストごとに確認して許可してください。"
+    },
+    "diagnostics": {
+      "title": "診断の権限",
+      "description": "診断ツールは固定の読み取り専用コマンド許可リストを使用します。各手順を確認して許可してください。ログの内容によって権限が付与されることはありません。"
+    },
+    "apiKey": {
+      "title": "API キー",
+      "description": "キーはシステムの資格情報ストアに保存されます。画面ではキーが設定済みかだけを確認し、値を読み戻して入力することはありません。プロバイダーは AI パネルで管理します。"
+    },
+    "history": {
+      "title": "会話履歴",
+      "description": "会話のコンテキストは SSH セッションごとに分離され、セッション終了時に実行時メモリから消去されます。"
+    }
+  },
+  "appearance": {
+    "title": "外観とショートカット",
+    "description": "既存の分割レイアウトを変更せずに、アプリのテーマと起動時のワークスペース設定を変更します。",
+    "theme": {
+      "title": "アプリのテーマ",
+      "description": "「システムに合わせる」を選ぶと、OS のライト／ダーク表示の変更に追従します。"
+    },
+    "monitorSidebar": {
+      "title": "サーバー監視サイドバー",
+      "description": "接続状態や監視データを変更せずに、左側の監視エリアを表示または非表示にします。"
+    },
+    "aiPanel": {
+      "title": "起動時に AI パネルを開く",
+      "description": "初期状態ではオフです。次回起動時の状態のみを変更し、現在のセッションには影響しません。"
+    },
+    "density": {
+      "title": "パネルの密度",
+      "description": "ワークスペースはコンパクトなデスクトップレイアウトを維持します。"
+    },
+    "shortcuts": {
+      "title": "キーボードショートカット",
+      "settings": "設定",
+      "search": "全体検索",
+      "newTab": "新しいタブ",
+      "toggleAi": "AI パネルの切り替え",
+      "description": "ショートカットを確認できます。このバージョンでは割り当てを変更できません。"
+    }
+  },
+  "aboutPanel": {
+    "title": "{{name}} について",
+    "description": "アプリケーション情報と実行中のバージョンを表示します。",
+    "iconAlt": "TermVista アプリアイコン",
+    "version": "バージョン",
+    "platform": "プラットフォーム",
+    "channel": "リリースチャンネル",
+    "buildHash": "ビルド識別子",
+    "updater": "アップデートサービス",
+    "updaterConfigured": "設定済み",
+    "updaterChecking": "設定を確認中…",
+    "updaterUnavailable": "利用できません",
+    "metadataUnavailable": "利用できません",
+    "metadataError": "アプリケーション情報を読み取れませんでした：{{error}}",
+    "copyDiagnostics": "機密情報を除いた診断情報をコピー",
+    "diagnosticsCopied": "診断情報をコピーしました。ホスト、アカウント、パス、鍵、ターミナル内容は含まれていません。",
+    "diagnosticsCopyFailed": "診断情報をコピーできませんでした。システムのクリップボード権限を確認してください。",
+    "englishDescription": "デスクトップ向け SSH ワークスペース",
+    "descriptionText": "SSH ターミナル、SFTP ファイル管理、サーバー監視、AI Copilot を備えたクロスプラットフォームのリモートワークスペースです。",
+    "tagline": "リモートワークスペースを、ひとつに。"
+  },
+  "vault": {
+    "title": "ログイン資格情報の保管庫",
+    "unlockedKeychain": "保管庫はロック解除済みです。マスターキーはシステム資格情報ストアで保護されています。パスワードと秘密鍵パスフレーズは AES-256-GCM で暗号化されています。",
+    "unlockedPassword": "保管庫はロック解除済みです。今回のセッションではマスターパスワードを使用しています。パスワードと秘密鍵パスフレーズは AES-256-GCM で暗号化されています。",
+    "lockedPassword": "保管庫はロックされています。保存済み資格情報を使うにはマスターパスワードを入力してください。",
+    "lockedKeychain": "保管庫はロックされています。システム資格情報ストアからマスターキーを再取得できます。",
+    "uninitialized": "設定後、保存を選択したパスワードと秘密鍵パスフレーズはこの端末に暗号化して保存されます。",
+    "loading": "ローカル保管庫の状態を読み込み中…",
+    "useKeychain": "システム資格情報ストアを使用",
+    "useMasterPassword": "マスターパスワードを使用",
+    "newPassword": "新しい保管庫マスターパスワード",
+    "passwordMin": "12 文字以上のマスターパスワード",
+    "confirmPassword": "保管庫マスターパスワードを確認",
+    "repeatPassword": "マスターパスワードを再入力",
+    "create": "保管庫を作成",
+    "cancel": "キャンセル",
+    "currentPassword": "保管庫マスターパスワード",
+    "enterPassword": "マスターパスワードを入力",
+    "unlock": "ロック解除",
+    "unlockVault": "保管庫のロックを解除",
+    "lockNow": "今すぐロック",
+    "rotateKey": "マスターキーをローテーションして再暗号化",
+    "changePassword": "マスターパスワードを変更してローテーション",
+    "newPasswordMin": "12 文字以上の新しいマスターパスワード",
+    "confirmNewPassword": "新しい保管庫マスターパスワードを確認",
+    "repeatNewPassword": "新しいマスターパスワードを再入力",
+    "rotate": "ローテーションして再暗号化",
+    "mismatch": "マスターパスワードが一致しません。",
+    "newMismatch": "新しいマスターパスワードが一致しません。",
+    "confirmRotate": "ローテーションにより保管庫内のすべてのローカル資格情報を再暗号化します。続行しますか？",
+    "confirmKeychainRotate": "新しいマスターキーを作成し、保管庫内のすべてのローカル資格情報を再暗号化します。続行しますか？",
+    "error": "保管庫の操作に失敗しました。",
+    "retry": "再試行"
+  },
+  "keyManager": {
+    "title": "SSH キー",
+    "locked": "保管庫のロックを解除すると管理できます",
+    "count": "{{count}} 個",
+    "newName": "新しいキー名",
+    "keyName": "キー名",
+    "keyType": "新しいキーの種類",
+    "rsaLength": "RSA キー長",
+    "rsa3072": "RSA 3072 ビット",
+    "rsa4096": "RSA 4096 ビット",
+    "generatePassphrase": "8 文字以上の秘密鍵パスフレーズ",
+    "generate": "生成",
+    "passphraseStorage": "秘密鍵はパスフレーズで暗号化してローカル保管庫に保存します。パスフレーズは安全に保管してください。",
+    "importPrompt": "インポートする OpenSSH 秘密鍵を選択",
+    "chooseFile": "ファイルを選択",
+    "importName": "インポートするキー名",
+    "importPassphrase": "暗号化されたキーのパスフレーズ（任意）",
+    "encryptImport": "暗号化してインポート",
+    "loading": "SSH キーを読み込み中…",
+    "empty": "保存済み SSH キーはありません。",
+    "createdAt": "作成日 {{date}}",
+    "usedBy": "{{count}} 件の接続で使用中",
+    "unlinked": "接続に関連付けられていません",
+    "showPublic": "公開鍵を表示",
+    "copyPublicAria": "{{alias}} の公開鍵をコピー",
+    "copyPublicTitle": "公開鍵をコピー",
+    "exportPrivateAria": "{{alias}} の秘密鍵をエクスポート",
+    "exportTitle": "暗号化秘密鍵をエクスポート",
+    "deleteAria": "キー {{alias}} を削除",
+    "deleteTitle": "キーを削除",
+    "referenced": "{{count}} 件の接続から参照されています",
+    "exportSafety": "新しいパスフレーズで暗号化し、現在のユーザーのみが読み取れる権限で作成します。元のキーが暗号化されている場合は現在のパスフレーズを入力してください。保存先ファイルは未作成である必要があります。",
+    "currentPassphrase": "現在の秘密鍵パスフレーズ",
+    "sourcePassphraseHint": "現在のパスフレーズ（元のキーが暗号化されている場合）",
+    "newExportPassphrase": "8 文字以上の新しいエクスポート用パスフレーズ",
+    "confirmExportPassphrase": "エクスポート用パスフレーズを確認",
+    "repeatExportPassphrase": "新しいパスフレーズを再入力",
+    "cancel": "キャンセル",
+    "chooseExport": "エクスポート先を選択",
+    "passphraseMismatch": "エクスポート用パスフレーズが一致しません。",
+    "deleteConfirm": "キー「{{alias}}」と保管庫内の秘密鍵を削除しますか？この操作は取り消せません。",
+    "deleted": "キー「{{alias}}」を削除しました。",
+    "generated": "SSH キーを生成し、暗号化してローカル保管庫に保存しました。",
+    "imported": "SSH 秘密鍵を検証し、暗号化してローカル保管庫に保存しました。",
+    "exported": "新しいパスフレーズで暗号化した SSH キーをエクスポートしました。",
+    "copyFailed": "SSH 公開鍵をコピーできません。システムのクリップボード権限を確認してください。",
+    "error": "SSH キー操作に失敗しました。",
+    "retry": "再試行"
+  }
+}

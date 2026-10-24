@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import i18next from "@/i18n";
 import type { ConnectionProfile } from "@/stores/workspaceStore";
 import type { AuthPromptEvent, HostKeyChallenge, SshError, SshStatusEvent, SshState } from "@/features/ssh/sshTypes";
 
@@ -110,14 +111,14 @@ export const useSshSessionStore = create<SshSessionState>((set) => ({
 
 export function statusLabel(state: SshState): string {
   switch (state) {
-    case "connecting": return "连接中";
-    case "verifyingHostKey": return "验证主机密钥";
-    case "authenticating": return "认证中";
-    case "openingPty": return "打开终端";
-    case "connected": return "已连接";
-    case "disconnecting": return "断开中";
-    case "disconnected": return "已断开";
-    case "canceled": return "已取消";
-    case "error": return "连接错误";
+    case "connecting": return i18next.t("connecting", { ns: "common" });
+    case "verifyingHostKey": return i18next.t("verifyingHostKey", { ns: "common" });
+    case "authenticating": return i18next.t("authenticating", { ns: "common" });
+    case "openingPty": return i18next.t("openingTerminal", { ns: "common" });
+    case "connected": return i18next.t("connected", { ns: "common" });
+    case "disconnecting": return i18next.t("disconnecting", { ns: "common" });
+    case "disconnected": return i18next.t("disconnected", { ns: "common" });
+    case "canceled": return i18next.t("canceled", { ns: "common" });
+    case "error": return i18next.t("connectionError", { ns: "common" });
   }
 }

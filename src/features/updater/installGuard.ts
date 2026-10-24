@@ -8,45 +8,45 @@ import { useTunnelStore } from "@/features/tunnels/tunnelStore";
 import { useUpdateMaintenanceTaskStore } from "./maintenanceTasks";
 
 export type UpdateInstallGuard = {
-  blockers: string[];
+  blockers: { key: string; count?: number; labels?: string[] }[];
   activeSshSessions: number;
   activeTunnels: number;
 };
 
 export function inspectUpdateInstallGuard(): UpdateInstallGuard {
-  const blockers: string[] = [];
+  const blockers: UpdateInstallGuard["blockers"] = [];
 
   const dirtyDocuments = useEditorStore.getState().documents.filter((document) => document.dirty);
   if (dirtyDocuments.length > 0) {
-    blockers.push("有 " + dirtyDocuments.length + " 个未保存的远程文件，请先保存或取消更新。");
+    blockers.push({ key: "dirtyDocuments", count: dirtyDocuments.length });
   }
 
   const activeTransfers = Object.values(useSftpSessionStore.getState().contexts)
     .flatMap((context) => context.transfers)
     .filter((transfer) => ["queued", "running", "awaitingConflict"].includes(transfer.status));
   if (activeTransfers.length > 0) {
-    blockers.push("有 " + activeTransfers.length + " 个 SFTP 传输任务未结束，请等待完成或取消。");
+    blockers.push({ key: "activeTransfers", count: activeTransfers.length });
   }
 
   const activeDiagnostics = Object.values(useDiagnosticStore.getState().runs)
     .filter((run) => run.status === "queued" || run.status === "running");
   if (activeDiagnostics.length > 0) {
-    blockers.push("有 " + activeDiagnostics.length + " 个服务器诊断任务正在运行。");
+    blockers.push({ key: "activeDiagnostics", count: activeDiagnostics.length });
   }
 
   const activeAiRequests = Object.keys(useAiStore.getState().activeRequests).length;
   if (activeAiRequests > 0) {
-    blockers.push("有 " + activeAiRequests + " 个 AI 请求正在生成。");
+    blockers.push({ key: "activeAiRequests", count: activeAiRequests });
   }
 
   const maintenanceTasks = useUpdateMaintenanceTaskStore.getState().tasks;
   if (maintenanceTasks.length > 0) {
-    const labels = [...new Set(maintenanceTasks.map((task) => task.label))].join("、");
-    blockers.push("正在执行本机或远程操作：" + labels + "。");
+    const labels = [...new Set(maintenanceTasks.map((task) => task.label))];
+    blockers.push({ key: "maintenanceTasks", labels });
   }
 
   if (useSettingsStore.getState().savingSection !== null) {
-    blockers.push("应用设置正在保存，请稍后再安装更新。");
+    blockers.push({ key: "savingSettings" });
   }
 
   const sshSessions = Object.values(useSshSessionStore.getState().sessions);
@@ -56,13 +56,13 @@ export function inspectUpdateInstallGuard(): UpdateInstallGuard {
     || useSshSessionStore.getState().hostKeyChallenges.length > 0
     || useSshSessionStore.getState().authPrompts.length > 0;
   if (pendingSsh.length > 0 || hasPendingPrompt) {
-    blockers.push("SSH 连接、认证或断开操作尚未完成。");
+    blockers.push({ key: "pendingSsh" });
   }
 
   const tunnelRuntimes = Object.values(useTunnelStore.getState().runtimes);
   const changingTunnels = tunnelRuntimes.filter((runtime) => runtime.state === "starting" || runtime.state === "stopping");
   if (changingTunnels.length > 0) {
-    blockers.push("端口转发正在启动或停止，请稍后再安装。");
+    blockers.push({ key: "changingTunnels" });
   }
 
   return {

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateLatestManifest, writeSha256Sums } from '../scripts/ci/generate-latest-json.mjs';
 import { inspectUpdaterArtifact } from '../scripts/ci/stage-updater-artifacts.mjs';
-import { updaterErrorMessage } from '../src/features/updater/updaterErrors.ts';
+import { updaterErrorCode } from '../src/features/updater/updaterErrors.ts';
 
 const version = '0.0.4';
 const targets = [
@@ -105,9 +105,9 @@ test('SHA256SUMS 包含全部发布文件且可重现地引用相对路径', asy
   });
 });
 
-test('更新错误将 404、网络超时和签名失败映射为可操作提示', () => {
-  assert.match(updaterErrorMessage(new Error('HTTP 404')), /清单尚未发布/);
-  assert.match(updaterErrorMessage(new Error('request timeout')), /检查网络后重试/);
-  assert.match(updaterErrorMessage(new Error('signature verification failed')), /阻止安装/);
-  assert.match(updaterErrorMessage(new Error('invalid latest manifest')), /更新操作失败/);
+test('更新错误映射为稳定代码，由当前界面语言显示提示', () => {
+  assert.equal(updaterErrorCode(new Error('HTTP 404')), 'notFound');
+  assert.equal(updaterErrorCode(new Error('request timeout')), 'network');
+  assert.equal(updaterErrorCode(new Error('signature verification failed')), 'signature');
+  assert.equal(updaterErrorCode(new Error('invalid latest manifest')), 'unknown');
 });

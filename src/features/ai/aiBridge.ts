@@ -19,11 +19,11 @@ export function saveAiProvider(input: AiProviderInput) {
 }
 
 export function testAiProvider(providerId: string) {
-  return runWithUpdateMaintenanceTask("测试 AI 服务连接", () => invoke<AiConnectionTestResult>("ai_provider_test", { providerId }));
+  return runWithUpdateMaintenanceTask("aiTestProvider", () => invoke<AiConnectionTestResult>("ai_provider_test", { providerId }));
 }
 
 export function listOllamaModels(baseUrl: string, allowInsecureHttp: boolean) {
-  return runWithUpdateMaintenanceTask("读取本地模型列表", () => invoke<AiProviderModelOption[]>("ai_ollama_models", { baseUrl, allowInsecureHttp }));
+  return runWithUpdateMaintenanceTask("aiReadModels", () => invoke<AiProviderModelOption[]>("ai_ollama_models", { baseUrl, allowInsecureHttp }));
 }
 
 export function previewAiContext(request: AiPreviewRequest) {

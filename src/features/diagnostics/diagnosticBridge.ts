@@ -48,8 +48,8 @@ export function getDiagnosticRun(runId: string, sessionId: string) {
   return invoke<DiagnosticRunSummary>("diagnostic_run_get", { runId, sessionId });
 }
 
-export function previewDiagnosticReport(runId: string, sessionId: string, providerId: string, evidenceIds: string[]) {
-  return invoke<DiagnosticReportPreview>("diagnostic_report_preview", { runId, sessionId, providerId, evidenceIds });
+export function previewDiagnosticReport(runId: string, sessionId: string, providerId: string, evidenceIds: string[], uiLanguage: string) {
+  return invoke<DiagnosticReportPreview>("diagnostic_report_preview", { runId, sessionId, providerId, evidenceIds, uiLanguage });
 }
 
 export function approveDiagnosticShare(preview: DiagnosticReportPreview) {

@@ -1,6 +1,6 @@
 import "./monacoWorkers";
 import * as monaco from "monaco-editor";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import {
   AlertCircle,
   Check,
@@ -39,6 +39,7 @@ import {
 } from "./remoteEditorBridge";
 import { getRegisteredLanguageReport, languageMappings } from "./languageRegistry";
 import { useEditorStore, type RemoteEditorTab } from "./editorStore";
+import { useTranslation } from "react-i18next";
 
 type EditorViewProps = {
   connectionId: string;
@@ -61,17 +62,36 @@ type SensitivePrompt = { documentId: string; closeAfterSave: boolean; asPath?: s
 const modelByDocument = new Map<string, monaco.editor.ITextModel>();
 const viewStateByDocument = new Map<string, monaco.editor.ICodeEditorViewState>();
 
-function safeErrorMessage(error: unknown) {
-  if (typeof error === "string") {
-    try {
-      const parsed = JSON.parse(error) as { message?: string };
-      return parsed.message ?? error;
-    } catch {
-      return error;
-    }
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+function useEditorTranslate(): Translate {
+  const { t } = useTranslation("editor");
+  return (key, options) => String(t(key as never, options as never));
+}
+
+function editorErrorCode(error: unknown): string {
+  const names = ["Disconnected", "Conflict", "NotSupported", "PermissionDenied", "NotFound", "InvalidPath", "Binary", "UnknownEncoding", "TooLarge", "InvalidContent", "InvalidRequest", "Other"];
+  const value = error && typeof error === "object" && "code" in error ? String(error.code) : typeof error === "string" ? error : "";
+  try {
+    const parsed = JSON.parse(value) as { code?: string };
+    const code = parsed.code ?? value;
+    return names.find((name) => name.toLowerCase() === code.toLowerCase()) ?? "Other";
+  } catch {
+    return names.find((name) => name.toLowerCase() === value.toLowerCase()) ?? "Other";
   }
-  if (error && typeof error === "object" && "message" in error) return String(error.message);
-  return "远程编辑操作失败；本地编辑缓冲仍保留。";
+}
+
+function localizedEditorError(t: Translate, error: unknown) {
+  const code = editorErrorCode(error);
+  const key = code === "Disconnected" ? "disconnected" : code === "Conflict" ? "conflict" : code === "NotSupported" ? "notSupported" : code === "PermissionDenied" ? "permissionDenied" : code === "NotFound" ? "notFound" : code === "InvalidPath" ? "invalidPath" : code === "Binary" ? "binary" : code === "UnknownEncoding" ? "unknownEncoding" : code === "TooLarge" ? "tooLarge" : code === "InvalidContent" ? "invalidContent" : code === "InvalidRequest" ? "invalidRequest" : "other";
+  return t(`errors.${key}`);
+}
+
+function readOnlyReason(t: Translate, document: { encoding: string; previewOnly: boolean; sizeBytes: number }) {
+  if (document.encoding === "unknown") return t("labels.encoding");
+  if (document.previewOnly) return t("largePreview");
+  if (document.sizeBytes > 2 * 1024 * 1024) return t("sizeWarning");
+  return t("readOnlyFallback");
 }
 
 function formatBytes(bytes: number) {
@@ -124,6 +144,14 @@ function EditorButton({
   return <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-sm text-muted-foreground" aria-label={label} title={label} onClick={onClick} disabled={disabled}>{icon}</Button>;
 }
 
+function EditorMenuItem({ label, onClick, disabled = false }: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return <button type="button" role="menuitem" disabled={disabled} className="flex h-7 w-full items-center rounded-sm px-2 text-left text-xs outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground disabled:pointer-events-none disabled:opacity-40" onClick={onClick}>{label}</button>;
+}
+
 export function RemoteEditorWorkspace({
   connectionId,
   connectionName,
@@ -131,7 +159,9 @@ export function RemoteEditorWorkspace({
   connected,
   children,
 }: EditorViewProps) {
+  const t = useEditorTranslate();
   const hostRef = useRef<HTMLDivElement>(null);
+  const editorContextMenuRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const modelSubscriptionRef = useRef<monaco.IDisposable | null>(null);
   const currentModelDocumentRef = useRef<string | null>(null);
@@ -156,6 +186,11 @@ export function RemoteEditorWorkspace({
   const [saveAsPrompt, setSaveAsPrompt] = useState<string | null>(null);
   const [capabilityNote, setCapabilityNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editorContextMenu, setEditorContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (editorContextMenu) editorContextMenuRef.current?.focus();
+  }, [editorContextMenu]);
 
   const languageReport = useMemo(
     () => getRegisteredLanguageReport(monaco.languages.getLanguages()),
@@ -172,7 +207,7 @@ export function RemoteEditorWorkspace({
   }, [registeredIds]);
 
   useEffect(() => {
-    if (import.meta.env.DEV) console.info("Monaco 已注册语法模式", languageReport.registeredCount, languageReport.missingIds);
+    if (import.meta.env.DEV) console.info("Monaco language registration", languageReport.registeredCount, languageReport.missingIds);
   }, [languageReport]);
 
   useEffect(() => {
@@ -203,7 +238,7 @@ export function RemoteEditorWorkspace({
       autoClosingBrackets: "always",
       autoClosingQuotes: "always",
       readOnly: true,
-      contextmenu: true,
+      contextmenu: false,
       bracketPairColorization: { enabled: true },
       guides: { indentation: true, bracketPairs: true },
     });
@@ -310,10 +345,10 @@ export function RemoteEditorWorkspace({
     try {
       const remote = await compareRemoteDocument(tab.documentId);
       setConflictPrompt({ documentId: tab.documentId, remote, loading: false, message });
-    } catch (error) {
-      setConflictPrompt({ documentId: tab.documentId, remote: null, loading: false, message: `${message} ${safeErrorMessage(error)}` });
+    } catch {
+      setConflictPrompt({ documentId: tab.documentId, remote: null, loading: false, message: `${message} ${t("messages.compareFailed")}` });
     }
-  }, [setSaveState]);
+  }, [setSaveState, t]);
 
   const saveDocument = useCallback(async (
     documentId: string,
@@ -324,7 +359,7 @@ export function RemoteEditorWorkspace({
     const tab = useEditorStore.getState().documents.find((item) => item.documentId === documentId);
     if (!tab || !tab.dirty || !tab.sha256) return false;
     if (!connected || tab.sessionId !== sessionId) {
-      setSaveState(documentId, "offline", "SSH 会话未连接或已变化。编辑草稿保留；重连后必须重新校验指纹和远程版本。");
+      setSaveState(documentId, "offline", t("messages.offline"));
       return false;
     }
     if ((tab.sensitive || (asPath && isSensitivePath(asPath))) && !confirmSensitive) {
@@ -343,16 +378,16 @@ export function RemoteEditorWorkspace({
       if (result.status === "conflict") {
         setBusy(false);
         setSaveAsPrompt(null);
-        await showConflict(tab, result.message ?? "远程文件发生变化，保存已阻止。");
+        await showConflict(tab, t("messages.remoteChanged"));
         return false;
       }
       if (result.status === "unsupported") {
         setBusy(false);
-        setSaveState(documentId, "conflict", result.message ?? "服务器不支持安全替换。原文件未修改。");
-        setConflictPrompt({ documentId, remote: null, loading: false, message: result.message ?? "服务器不支持安全替换。原文件未修改。" });
+        setSaveState(documentId, "conflict", t("messages.unsupportedReplace"));
+        setConflictPrompt({ documentId, remote: null, loading: false, message: t("messages.unsupportedReplace") });
         return false;
       }
-      if (!result.verified || !result.newSha256) throw new Error("服务端未完成写后校验，编辑缓冲保持未保存。");
+      if (!result.verified || !result.newSha256) throw new Error("write-not-verified");
       markSaved(documentId, {
         sha256: result.newSha256,
         text: tab.text,
@@ -360,8 +395,8 @@ export function RemoteEditorWorkspace({
         displayName: result.canonicalPath.split("/").pop() ?? tab.displayName,
         sizeBytes: result.sizeBytes ?? new TextEncoder().encode(tab.text).length,
       });
-      if (result.message) toast.message(result.message, { duration: 5500 });
-      else toast.success("远程文件已保存并回读校验。", { duration: 2500 });
+      if (!result.durableWrite) toast.warning(t("messages.savedDurabilityWarning"), { duration: 5500 });
+      else toast.success(t("messages.saved"), { duration: 2500 });
       setSensitivePrompt(null);
       setConflictPrompt(null);
       setSaveAsPrompt(null);
@@ -372,14 +407,14 @@ export function RemoteEditorWorkspace({
       }
       return true;
     } catch (error) {
-      const message = safeErrorMessage(error);
-      setSaveState(documentId, /断开|连接|会话/i.test(message) ? "offline" : "error", message);
+      const message = error instanceof Error && error.message === "write-not-verified" ? t("messages.writeNotVerified") : localizedEditorError(t, error);
+      setSaveState(documentId, editorErrorCode(error) === "Disconnected" ? "offline" : "error", message);
       toast.error(message);
       return false;
     } finally {
       setBusy(false);
     }
-  }, [connected, sessionId, setSaveState, showConflict, markSaved, closeNow]);
+  }, [connected, sessionId, setSaveState, showConflict, markSaved, closeNow, t]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -424,19 +459,37 @@ export function RemoteEditorWorkspace({
 
   const openOrClose = (tab: RemoteEditorTab) => openClosePrompt(tab);
 
+  const showEditorContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!activeDocument || !(event.target as HTMLElement).closest(".monaco-editor")) return;
+    event.preventDefault();
+    const width = 184;
+    const height = 244;
+    setEditorContextMenu({
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8)),
+    });
+  };
+
+  const runEditorContextAction = (actionId: string) => {
+    setEditorContextMenu(null);
+    const action = editorRef.current?.getAction(actionId);
+    if (!action?.isSupported()) return;
+    void action.run().catch(() => toast.error(t("contextMenu.actionFailed")));
+  };
+
   const restoreLargeFile = async (tab: RemoteEditorTab) => {
     if (!sessionId || !connected) return;
     try {
       const fullDocument = await reloadRemoteDocument(tab.documentId);
       const editorStoreDoc = useEditorStore.getState().documents.find((item) => item.documentId === tab.documentId);
       if (!editorStoreDoc || editorStoreDoc.dirty) {
-        toast.warning("文件已修改，请先保存或关闭后重新打开再继续编辑。");
+        toast.warning(t("refreshDirtyWarning"));
         return;
       }
       useEditorStore.getState().mergeRemote(fullDocument, false);
-      if (fullDocument.readOnly) toast.message(fullDocument.readOnlyReason ?? "此文件仍以只读方式打开。");
+      if (fullDocument.readOnly) toast.message(readOnlyReason(t, fullDocument));
     } catch (error) {
-      toast.error(safeErrorMessage(error));
+      toast.error(localizedEditorError(t, error));
     }
   };
 
@@ -445,9 +498,9 @@ export function RemoteEditorWorkspace({
     try {
       const document = await rebindRemoteDocument(tab.documentId, sessionId);
       useEditorStore.getState().mergeRemote(document, true);
-      toast.success("已核对连接身份与远程文件版本，编辑缓冲已重新绑定。");
+      toast.success(t("messages.rebound"));
     } catch (error) {
-      await showConflict(tab, safeErrorMessage(error));
+      await showConflict(tab, localizedEditorError(t, error));
     }
   };
 
@@ -461,32 +514,32 @@ export function RemoteEditorWorkspace({
       const model = modelByDocument.get(tab.documentId);
       if (model && document.text != null) model.setValue(document.text);
       setConflictPrompt(null);
-      toast.message("已重新加载远程版本；本地未保存修改已放弃。", { duration: 3500 });
+      toast.message(t("messages.reloaded"), { duration: 3500 });
     } catch (error) {
-      toast.error(safeErrorMessage(error));
+      toast.error(localizedEditorError(t, error));
     }
   };
 
   const onCompare = async (tab: RemoteEditorTab) => {
-    setConflictPrompt({ documentId: tab.documentId, remote: null, loading: true, message: "正在读取远程版本…" });
+    setConflictPrompt({ documentId: tab.documentId, remote: null, loading: true, message: t("dialog.readingRemote") });
     try {
       const remote = await compareRemoteDocument(tab.documentId);
-      setConflictPrompt({ documentId: tab.documentId, remote, loading: false, message: "保存前版本与远程当前版本如下。" });
+      setConflictPrompt({ documentId: tab.documentId, remote, loading: false, message: t("dialog.compareDescription") });
     } catch (error) {
-      setConflictPrompt({ documentId: tab.documentId, remote: null, loading: false, message: safeErrorMessage(error) });
+      setConflictPrompt({ documentId: tab.documentId, remote: null, loading: false, message: localizedEditorError(t, error) });
     }
   };
 
   useEffect(() => {
     if (!sessionId || !connected) return;
     let disposed = false;
-    void getEditorSaveCapabilities(sessionId).then((capabilities) => {
-      if (!disposed) setCapabilityNote(capabilities.note);
+    void getEditorSaveCapabilities(sessionId).then(() => {
+      if (!disposed) setCapabilityNote(t("messages.readCapability"));
     }).catch(() => {
-      if (!disposed) setCapabilityNote("无法读取当前 SFTP 保存能力；保存操作将继续由 Rust 端逐项校验。");
+      if (!disposed) setCapabilityNote(t("messages.readCapability"));
     });
     return () => { disposed = true; };
-  }, [sessionId, connected]);
+  }, [sessionId, connected, t]);
 
   const activeView = activeId === "terminal" ? "terminal" : "editor";
   const languageOptionsForDoc = activeDocument
@@ -497,36 +550,36 @@ export function RemoteEditorWorkspace({
   const saveStatus = !activeDocument
     ? ""
     : activeDocument.saveState === "saving"
-      ? "正在保存"
+      ? t("status.saving")
       : activeDocument.saveState === "conflict"
-        ? "远端已变化"
+        ? t("status.conflict")
         : activeDocument.saveState === "offline" || (activeDocument.dirty && !sameSessionOnline)
-          ? "已离线（草稿保留）"
+          ? t("status.offline")
           : activeDocument.saveState === "error"
-            ? "保存失败（草稿保留）"
+            ? t("status.error")
             : activeDocument.dirty
-              ? "有未保存修改"
+              ? t("status.dirty")
               : activeDocument.saveState === "saved"
-                ? "已保存并校验"
-                : sameSessionOnline ? "远程文件已校验" : "已离线";
+                ? t("status.saved")
+                : sameSessionOnline ? t("status.verified") : t("status.disconnected");
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-col" aria-label="终端与远程编辑工作区" data-monaco-language-count={registeredLanguageCount}>
-      <div className="flex h-7 shrink-0 items-stretch border-b border-border bg-panel-header px-1" role="tablist" aria-label="终端和编辑文件">
+    <section className="flex h-full min-h-0 min-w-0 flex-col" aria-label={t("labels.workspace")} data-monaco-language-count={registeredLanguageCount}>
+      <div className="flex h-7 shrink-0 items-stretch border-b border-border bg-panel-header px-1" role="tablist" aria-label={t("labels.mainTabs")}>
         <button type="button" role="tab" aria-selected={activeView === "terminal"} className={`flex h-full items-center gap-1.5 border-b-2 px-2 text-[10px] ${activeView === "terminal" ? "border-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`} onClick={() => activateTerminal(connectionId)}>
-          <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-success" : "bg-muted-foreground/40"}`} />终端
+          <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-success" : "bg-muted-foreground/40"}`} />{t("actions.terminal")}
         </button>
-        <div className="compact-scrollbar flex min-w-0 flex-1 items-stretch overflow-x-auto" role="tablist" aria-label="远程编辑文件">
+        <div className="compact-scrollbar flex min-w-0 flex-1 items-stretch overflow-x-auto" role="tablist" aria-label={t("labels.remoteFiles")}>
           {docs.map((tab) => <div key={tab.documentId} role="presentation" className={`group flex h-full max-w-56 shrink-0 items-center border-b-2 ${activeId === tab.documentId ? "border-accent bg-panel text-foreground" : "border-transparent text-muted-foreground hover:bg-panel/70"}`}>
             <button type="button" role="tab" aria-selected={activeId === tab.documentId} title={`${connectionName} / ${tab.canonicalPath}`} className="flex h-full min-w-0 items-center gap-1 px-2 text-[10px]" onClick={() => activate(connectionId, tab.documentId)}>
               <FileCode2 size={11} className="shrink-0 text-accent" />
               <span className="truncate">{tab.displayName}</span>
-              {tab.dirty && <span className="ml-0.5 text-[11px] font-bold text-accent" aria-label="有未保存修改" title="有未保存修改">●</span>}
+              {tab.dirty && <span className="ml-0.5 text-[11px] font-bold text-accent" aria-label={t("labels.unsaved")} title={t("labels.unsaved")}>●</span>}
               {!tab.dirty && tab.saveState === "saved" && <Check size={10} className="text-success" />}
             </button>
-            <button type="button" aria-label={`关闭 ${tab.displayName}`} title="关闭编辑标签" className="mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => openOrClose(tab)}><X size={10} /></button>
+            <button type="button" aria-label={`${t("actions.closeEditorTab")} ${tab.displayName}`} title={t("actions.closeEditorTab")} className="mr-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => openOrClose(tab)}><X size={10} /></button>
           </div>)}
         </div>
-        {docs.length > 0 && <Button type="button" variant="ghost" size="icon" className="h-6 w-6 self-center rounded-sm text-muted-foreground" aria-label="关闭未修改的编辑标签" title="关闭未修改的编辑标签" onClick={removeCleanDocuments}><PanelTopClose size={12} /></Button>}
+        {docs.length > 0 && <Button type="button" variant="ghost" size="icon" className="h-6 w-6 self-center rounded-sm text-muted-foreground" aria-label={t("actions.closeCleanTabs")} title={t("actions.closeCleanTabs")} onClick={removeCleanDocuments}><PanelTopClose size={12} /></Button>}
       </div>
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -539,21 +592,21 @@ export function RemoteEditorWorkspace({
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${connected && activeDocument.sessionId === sessionId ? "bg-success" : "bg-warning"}`} />
               <span className="max-w-36 shrink-0 truncate rounded-sm bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium" title={connectionName}>{connectionName}</span>
               <span className="truncate font-mono text-[11px]" title={`${connectionName} / ${activeDocument.canonicalPath}`}>{activeDocument.canonicalPath}</span>
-              {activeDocument.sensitive && <span className="shrink-0 rounded-sm border border-warning/40 px-1 py-0.5 text-[10px] text-warning">敏感路径</span>}
+              {activeDocument.sensitive && <span className="shrink-0 rounded-sm border border-warning/40 px-1 py-0.5 text-[10px] text-warning">{t("actions.sensitivePath")}</span>}
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
-              <EditorButton label="保存（⌘S / Ctrl+S）" icon={busy ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} disabled={!canSave || busy} onClick={() => startSave(activeDocument)} />
-              <EditorButton label="查找" icon={<Search size={12} />} onClick={() => { void editorRef.current?.getAction("actions.find")?.run(); }} />
-              <EditorButton label="查找和替换" icon={<Code2 size={12} />} onClick={() => { void editorRef.current?.getAction("editor.action.startFindReplaceAction")?.run(); }} />
-              <EditorButton label="跳转到行" icon={<ChevronDown size={12} />} onClick={() => { void editorRef.current?.getAction("editor.action.gotoLine")?.run(); }} />
-              <EditorButton label="折叠全部代码" icon={<FoldVertical size={12} />} onClick={() => { void editorRef.current?.getAction("editor.foldAll")?.run(); }} />
-              <EditorButton label="撤销" icon={<span className="text-[12px]">↶</span>} onClick={() => { void editorRef.current?.getAction("undo")?.run(); }} />
-              <EditorButton label="重做" icon={<span className="text-[12px]">↷</span>} onClick={() => { void editorRef.current?.getAction("redo")?.run(); }} />
+              <EditorButton label={t("actions.save")} icon={busy ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} disabled={!canSave || busy} onClick={() => startSave(activeDocument)} />
+              <EditorButton label={t("actions.find")} icon={<Search size={12} />} onClick={() => { void editorRef.current?.getAction("actions.find")?.run(); }} />
+              <EditorButton label={t("actions.replace")} icon={<Code2 size={12} />} onClick={() => { void editorRef.current?.getAction("editor.action.startFindReplaceAction")?.run(); }} />
+              <EditorButton label={t("actions.goToLine")} icon={<ChevronDown size={12} />} onClick={() => { void editorRef.current?.getAction("editor.action.gotoLine")?.run(); }} />
+              <EditorButton label={t("actions.foldAll")} icon={<FoldVertical size={12} />} onClick={() => { void editorRef.current?.getAction("editor.foldAll")?.run(); }} />
+              <EditorButton label={t("actions.undo")} icon={<span className="text-[12px]">↶</span>} onClick={() => { void editorRef.current?.getAction("undo")?.run(); }} />
+              <EditorButton label={t("actions.redo")} icon={<span className="text-[12px]">↷</span>} onClick={() => { void editorRef.current?.getAction("redo")?.run(); }} />
               <span className="mx-1 h-4 w-px bg-border" />
-              <EditorButton label="与远程版本比较" icon={<GitCompareArrows size={12} />} onClick={() => void onCompare(activeDocument)} />
-              {activeDocument.sessionId !== sessionId && connected && <Button type="button" variant="outline" size="xs" className="h-5 rounded-sm px-1.5 text-[9px]" onClick={() => void onRebind(activeDocument)}>重新校验并绑定</Button>}
-              <EditorButton label="刷新远程文件" icon={<RefreshCw size={12} />} disabled={busy} onClick={() => {
-                if (activeDocument.dirty) setConflictPrompt({ documentId: activeDocument.documentId, remote: null, loading: false, message: "重新加载会丢弃当前本地修改。请确认后再操作。" });
+              <EditorButton label={t("actions.compare")} icon={<GitCompareArrows size={12} />} onClick={() => void onCompare(activeDocument)} />
+              {activeDocument.sessionId !== sessionId && connected && <Button type="button" variant="outline" size="xs" className="h-5 rounded-sm px-1.5 text-[9px]" onClick={() => void onRebind(activeDocument)}>{t("actions.rebind")}</Button>}
+              <EditorButton label={t("actions.refresh")} icon={<RefreshCw size={12} />} disabled={busy} onClick={() => {
+                if (activeDocument.dirty) setConflictPrompt({ documentId: activeDocument.documentId, remote: null, loading: false, message: t("dialog.discardReload") });
                 else void onReload();
               }} />
             </div>
@@ -561,19 +614,31 @@ export function RemoteEditorWorkspace({
 
           {activeDocument.readOnlyReason && <div className="flex min-h-7 items-center gap-1.5 bg-warning/5 px-3 py-1 text-[11px] text-warning" role="status">
             <AlertCircle size={11} className="shrink-0" />
-            <span className="min-w-0 flex-1">{activeDocument.readOnlyReason}</span>
-            {activeDocument.readOnlyReason.includes("2 MiB") && <Button type="button" variant="outline" size="xs" className="h-5 shrink-0 rounded-sm px-1.5 text-[9px]" onClick={() => void restoreLargeFile(activeDocument)}>继续编辑</Button>}
+            <span className="min-w-0 flex-1">{readOnlyReason(t, activeDocument)}</span>
+            {activeDocument.sizeBytes > 2 * 1024 * 1024 && <Button type="button" variant="outline" size="xs" className="h-5 shrink-0 rounded-sm px-1.5 text-[9px]" onClick={() => void restoreLargeFile(activeDocument)}>{t("actions.continueEditing")}</Button>}
           </div>}
 
-          <div className="relative min-h-0 flex-1" ref={hostRef} aria-label={`Monaco 编辑器 ${activeDocument.displayName}`}>
+          <div className="relative min-h-0 flex-1" ref={hostRef} aria-label={t("labels.editorForFile", { name: activeDocument.displayName })} onContextMenu={showEditorContextMenu}>
             {activeDocument.encoding === "unknown" && <div className="absolute inset-0 z-10 flex items-center justify-center bg-panel/95 p-6 text-center text-[11px] text-muted-foreground" role="status">
-              无法安全识别此文件编码，原始文件保持只读且未做字符转换。请下载后用已知编码查看。
+              {t("labels.encoding")}
             </div>}
           </div>
 
+          {editorContextMenu && <div className="fixed inset-0 z-[80]" onMouseDown={() => setEditorContextMenu(null)} onContextMenu={(event) => { event.preventDefault(); setEditorContextMenu(null); }}>
+            <div ref={editorContextMenuRef} role="menu" tabIndex={-1} aria-label={t("contextMenu.label")} className="fixed min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none" style={{ left: editorContextMenu.x, top: editorContextMenu.y }} onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") setEditorContextMenu(null); }}>
+              <EditorMenuItem label={t("contextMenu.cut")} disabled={Boolean(activeDocument.readOnly || !connected || activeDocument.sessionId !== sessionId)} onClick={() => runEditorContextAction("editor.action.clipboardCutAction")} />
+              <EditorMenuItem label={t("contextMenu.copy")} onClick={() => runEditorContextAction("editor.action.clipboardCopyAction")} />
+              <EditorMenuItem label={t("contextMenu.paste")} disabled={Boolean(activeDocument.readOnly || !connected || activeDocument.sessionId !== sessionId)} onClick={() => runEditorContextAction("editor.action.clipboardPasteAction")} />
+              <div role="separator" className="my-1 h-px bg-border/70" />
+              <EditorMenuItem label={t("contextMenu.find")} onClick={() => runEditorContextAction("actions.find")} />
+              <EditorMenuItem label={t("contextMenu.replace")} onClick={() => runEditorContextAction("editor.action.startFindReplaceAction")} />
+              <EditorMenuItem label={t("contextMenu.selectAll")} onClick={() => runEditorContextAction("editor.action.selectAll")} />
+            </div>
+          </div>}
+
           <footer className="flex h-7 shrink-0 items-center justify-between bg-panel-header px-2 text-[10px] text-muted-foreground">
             <div className="flex min-w-0 items-center gap-2">
-              <select aria-label="编辑器语言模式" className="h-4 max-w-40 border-0 bg-transparent text-[9px] text-muted-foreground outline-none" value={activeDocument.languageId} onChange={(event) => {
+              <select aria-label={t("actions.languageMode")} className="h-4 max-w-40 border-0 bg-transparent text-[9px] text-muted-foreground outline-none" value={activeDocument.languageId} onChange={(event) => {
                 const languageId = event.target.value;
                 setLanguage(activeDocument.documentId, languageId);
                 const model = modelByDocument.get(activeDocument.documentId);
@@ -583,10 +648,10 @@ export function RemoteEditorWorkspace({
               </select>
               <span>{activeDocument.encoding}</span><span>{activeDocument.lineEnding.toUpperCase()}</span>
               <span>{formatBytes(activeDocument.sizeBytes)}</span>
-              {activeDocument.readOnly && <span>只读预览</span>}
+              {activeDocument.readOnly && <span>{t("actions.readOnlyPreview")}</span>}
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <span>行 {cursor.line}，列 {cursor.column}</span>
+              <span>{t("labels.rows", { line: cursor.line, column: cursor.column })}</span>
               <span className="inline-flex items-center gap-1" role="status">
                 {activeDocument.dirty || activeDocument.saveState === "error" || activeDocument.saveState === "conflict"
                   ? <AlertCircle size={10} className="text-warning" />
@@ -596,57 +661,57 @@ export function RemoteEditorWorkspace({
             </div>
           </footer>
           {activeDocument.error && activeDocument.saveState === "error" && <div className="border-t border-destructive/30 bg-destructive/5 px-2 py-1 text-[10px] text-destructive" role="alert">{activeDocument.error}</div>}
-          {capabilityNote && <span className="sr-only" title={capabilityNote}>保存能力已探测</span>}
+          {capabilityNote && <span className="sr-only" title={capabilityNote}>{t("labels.savedCapability")}</span>}
         </div>}
-        {activeView === "editor" && !activeDocument && <div className="flex min-h-0 flex-1 items-center justify-center text-[11px] text-muted-foreground">选择下方 SFTP 文件列表中的文本文件以打开编辑。</div>}
+        {activeView === "editor" && !activeDocument && <div className="flex min-h-0 flex-1 items-center justify-center text-[11px] text-muted-foreground">{t("labels.empty")}</div>}
       </div>
 
       <Dialog open={closePrompt !== null} onOpenChange={(open) => { if (!open) setClosePrompt(null); }}>
         <DialogContent className="gap-0 p-3">
-          <DialogTitle>关闭未保存文件？</DialogTitle>
-          <DialogDescription>保存会先检查远程版本与服务器替换能力。保存失败时编辑器会保留草稿。</DialogDescription>
-          {closePrompt && docs.find((item) => item.documentId === closePrompt.documentId)?.sensitive && <p className="rounded-sm border border-warning/40 bg-warning/5 p-2 text-[10px] leading-4 text-warning">此路径可能包含敏感配置。确认保存会将当前内容写回原服务器文件。</p>}
+          <DialogTitle>{t("dialog.closeTitle")}</DialogTitle>
+          <DialogDescription>{t("dialog.closeDescription")}</DialogDescription>
+          {closePrompt && docs.find((item) => item.documentId === closePrompt.documentId)?.sensitive && <p className="rounded-sm border border-warning/40 bg-warning/5 p-2 text-[10px] leading-4 text-warning">{t("dialog.sensitiveClose")}</p>}
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" size="xs" className="rounded-sm" onClick={() => setClosePrompt(null)}>取消</Button>
+            <Button type="button" variant="ghost" size="xs" className="rounded-sm" onClick={() => setClosePrompt(null)}>{t("dialog.cancel")}</Button>
             <Button type="button" variant="outline" size="xs" className="rounded-sm" onClick={() => {
               const tab = closePrompt && useEditorStore.getState().documents.find((item) => item.documentId === closePrompt.documentId);
               if (tab) void closeNow(tab);
-            }}>放弃修改</Button>
-            <Button type="button" size="xs" className="rounded-sm" disabled={busy} onClick={() => void chooseCloseSave()}>保存并关闭</Button>
+            }}>{t("dialog.discard")}</Button>
+            <Button type="button" size="xs" className="rounded-sm" disabled={busy} onClick={() => void chooseCloseSave()}>{t("dialog.saveClose")}</Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={sensitivePrompt !== null} onOpenChange={(open) => { if (!open) setSensitivePrompt(null); }}>
         <DialogContent className="gap-0 p-3">
-          <DialogTitle>确认写回敏感路径？</DialogTitle>
+          <DialogTitle>{t("dialog.sensitiveTitle")}</DialogTitle>
           <DialogDescription>{sensitivePrompt?.asPath ?? (sensitivePrompt && docs.find((item) => item.documentId === sensitivePrompt.documentId)?.canonicalPath)}</DialogDescription>
-          <p className="text-[10px] leading-4 text-warning">此文件可能包含密钥或系统配置。TermVista 会先检查远程哈希，再通过临时文件写入并回读校验；服务器不支持安全替换时会停止保存。</p>
+          <p className="text-[10px] leading-4 text-warning">{t("dialog.sensitiveWarning")}</p>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" size="xs" className="rounded-sm" onClick={() => setSensitivePrompt(null)}>取消</Button>
+            <Button type="button" variant="ghost" size="xs" className="rounded-sm" onClick={() => setSensitivePrompt(null)}>{t("dialog.cancel")}</Button>
             <Button type="button" size="xs" className="rounded-sm" disabled={busy || !sensitivePrompt} onClick={() => {
               if (sensitivePrompt) void saveDocument(sensitivePrompt.documentId, true, sensitivePrompt.closeAfterSave, sensitivePrompt.asPath);
-            }}>确认并保存</Button>
+            }}>{t("dialog.confirmSave")}</Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={conflictPrompt !== null} onOpenChange={(open) => { if (!open) setConflictPrompt(null); }}>
         <DialogContent className="w-[min(920px,calc(100vw-32px))] gap-0 p-3">
-          <DialogTitle>远程文件冲突</DialogTitle>
+          <DialogTitle>{t("dialog.conflictTitle")}</DialogTitle>
           <DialogDescription>{conflictPrompt?.message}</DialogDescription>
           {conflictPrompt?.remote ? <div className="grid min-h-0 grid-cols-2 gap-2">
             <div className="min-h-0 rounded-sm border border-border">
-              <div className="border-b border-border px-2 py-1 text-[10px] font-medium">本地编辑缓冲</div>
+              <div className="border-b border-border px-2 py-1 text-[10px] font-medium">{t("dialog.localBuffer")}</div>
               <pre className="compact-scrollbar max-h-[48vh] overflow-auto whitespace-pre-wrap break-all p-2 font-mono text-[10px] leading-4">{docs.find((item) => item.documentId === conflictPrompt.documentId)?.text}</pre>
             </div>
             <div className="min-h-0 rounded-sm border border-border">
-              <div className="border-b border-border px-2 py-1 text-[10px] font-medium">远程当前版本</div>
-              <pre className="compact-scrollbar max-h-[48vh] overflow-auto whitespace-pre-wrap break-all p-2 font-mono text-[10px] leading-4">{conflictPrompt.remote.text ?? "远程编码无法无损显示。"}</pre>
+              <div className="border-b border-border px-2 py-1 text-[10px] font-medium">{t("dialog.remoteVersion")}</div>
+              <pre className="compact-scrollbar max-h-[48vh] overflow-auto whitespace-pre-wrap break-all p-2 font-mono text-[10px] leading-4">{conflictPrompt.remote.text ?? t("dialog.encodingUnrenderable")}</pre>
             </div>
-          </div> : conflictPrompt?.loading ? <div className="flex h-24 items-center justify-center text-[11px] text-muted-foreground">正在读取远程版本…</div> : null}
+          </div> : conflictPrompt?.loading ? <div className="flex h-24 items-center justify-center text-[11px] text-muted-foreground">{t("dialog.readingRemote")}</div> : null}
           <div className="flex flex-wrap justify-end gap-2 pt-3">
-            <Button type="button" variant="ghost" size="xs" className="rounded-sm" onClick={() => setConflictPrompt(null)}>取消</Button>
+            <Button type="button" variant="ghost" size="xs" className="rounded-sm" onClick={() => setConflictPrompt(null)}>{t("dialog.cancel")}</Button>
             <Button type="button" variant="outline" size="xs" className="rounded-sm" onClick={() => {
               const tab = conflictPrompt && useEditorStore.getState().documents.find((item) => item.documentId === conflictPrompt.documentId);
               if (tab) {
@@ -654,23 +719,23 @@ export function RemoteEditorWorkspace({
                 setSaveAsPrompt(tab.documentId);
                 setConflictPrompt(null);
               }
-            }}>另存为新文件</Button>
-            <Button type="button" variant="outline" size="xs" className="rounded-sm" disabled={busy || !connected || conflictPrompt?.loading} onClick={() => void onReload()}>重新加载远程版本</Button>
+            }}>{t("dialog.saveAs")}</Button>
+            <Button type="button" variant="outline" size="xs" className="rounded-sm" disabled={busy || !connected || conflictPrompt?.loading} onClick={() => void onReload()}>{t("dialog.reload")}</Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={saveAsPrompt !== null} onOpenChange={(open) => { if (!open) setSaveAsPrompt(null); }}>
         <DialogContent className="gap-0 p-3">
-          <DialogTitle>另存为远程新文件</DialogTitle>
-          <DialogDescription>此操作只允许创建不存在的新路径，不覆盖现有文件；原文件保持不变。</DialogDescription>
-          <Input aria-label="另存为远程路径" value={saveAsPath} onChange={(event) => setSaveAsPath(event.target.value)} className="h-7 rounded-sm text-[11px]" autoFocus />
+          <DialogTitle>{t("dialog.saveAsTitle")}</DialogTitle>
+          <DialogDescription>{t("dialog.saveAsDescription")}</DialogDescription>
+          <Input aria-label={t("dialog.saveAsPath")} value={saveAsPath} onChange={(event) => setSaveAsPath(event.target.value)} className="h-7 rounded-sm text-[11px]" autoFocus />
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" size="xs" className="rounded-sm" onClick={() => setSaveAsPrompt(null)}>取消</Button>
+            <Button type="button" variant="ghost" size="xs" className="rounded-sm" onClick={() => setSaveAsPrompt(null)}>{t("dialog.cancel")}</Button>
             <Button type="button" size="xs" className="rounded-sm" disabled={busy || !saveAsPath.trim() || !saveAsPrompt} onClick={() => {
               const documentId = saveAsPrompt;
               if (documentId) void saveDocument(documentId, false, false, saveAsPath.trim());
-            }}>保存新文件</Button>
+            }}>{t("dialog.saveNew")}</Button>
           </div>
         </DialogContent>
       </Dialog>

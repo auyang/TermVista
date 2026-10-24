@@ -19,8 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { getAppMetadata } from "@/features/settings/settingsBridge";
 import { checkForUpdate } from "@/features/updater/updaterBridge";
-import { updaterErrorMessage } from "@/features/updater/updaterErrors";
+import { updaterErrorCode } from "@/features/updater/updaterErrors";
 import { useUpdaterStore } from "@/features/updater/updaterStore";
+import { applyLanguagePreference } from "@/i18n";
+import { useTranslation } from "react-i18next";
 
 function legacyWorkspaceTheme(): "light" | "dark" | null {
   try {
@@ -40,10 +42,13 @@ function closeApplicationWindow() {
 }
 
 export function AppShell() {
+  const { t: tw } = useTranslation("workspace");
+  const { t: tu } = useTranslation("updater");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pendingEditorClose, setPendingEditorClose] = useState(false);
   const [startupReady, setStartupReady] = useState(false);
+  const [localeReady, setLocaleReady] = useState(false);
   const allowEditorWindowClose = useRef(false);
   const startupUpdateCheckStarted = useRef(false);
   const dirtyEditorIds = useEditorStore(useShallow((state) =>
@@ -61,6 +66,7 @@ export function AppShell() {
   const setAiOpen = useWorkspaceStore((state) => state.setAiOpen);
   const toggleAi = useWorkspaceStore((state) => state.toggleAi);
   const themeMode = useSettingsStore((state) => state.settings.appearance.themeMode);
+  const languagePreference = useSettingsStore((state) => state.settings.appearance.languagePreference);
   const showMonitorSidebar = useSettingsStore((state) => state.settings.appearance.showMonitorSidebar);
 
   useEffect(() => {
@@ -69,15 +75,27 @@ export function AppShell() {
       let startupSettings = null;
       try {
         startupSettings = await useSettingsStore.getState().load();
-        if (canceled) return;
-        const oldTheme = legacyWorkspaceTheme();
-        if (startupSettings.revision === 0 && oldTheme) {
-          startupSettings = await useSettingsStore.getState().update("appearance", { themeMode: oldTheme });
-        }
       } catch {
         // Settings errors remain visible in the settings dialog; use safe defaults for this launch.
       }
       if (canceled) return;
+      try {
+        await applyLanguagePreference(startupSettings?.appearance.languagePreference ?? "system");
+      } catch {
+        await applyLanguagePreference("system");
+      }
+      if (canceled) return;
+      setLocaleReady(true);
+      if (startupSettings) {
+        const oldTheme = legacyWorkspaceTheme();
+        if (startupSettings.revision === 0 && oldTheme) {
+          try {
+            startupSettings = await useSettingsStore.getState().update("appearance", { themeMode: oldTheme });
+          } catch {
+            // 保留旧主题迁移失败前已读取的偏好。
+          }
+        }
+      }
       if (!import.meta.env.DEV && useWorkspaceStore.getState().tabs.some((tab) => tab.mode === "demo")) {
         removeDemoTabs();
       }
@@ -111,6 +129,17 @@ export function AppShell() {
   }, [addBlankTab, resetTabsForStartup, removeDemoTabs, setAiOpen, setMonitorCollapsed]);
 
   useEffect(() => {
+    if (!localeReady || languagePreference !== "system") return;
+    const syncSystemLanguage = () => { void applyLanguagePreference("system"); };
+    window.addEventListener("focus", syncSystemLanguage);
+    window.addEventListener("languagechange", syncSystemLanguage);
+    return () => {
+      window.removeEventListener("focus", syncSystemLanguage);
+      window.removeEventListener("languagechange", syncSystemLanguage);
+    };
+  }, [languagePreference, localeReady]);
+
+  useEffect(() => {
     if (!startupReady || !useSettingsStore.getState().loaded || startupUpdateCheckStarted.current) return;
     startupUpdateCheckStarted.current = true;
     if (!isTauri() || !useSettingsStore.getState().settings.general.autoCheckUpdates) return;
@@ -124,8 +153,8 @@ export function AppShell() {
         if (canceled) return;
         if (update) {
           useUpdaterStore.getState().setState({ phase: "available", update, error: null });
-          toast.info("TermVista 有新版本", {
-            description: `版本 ${update.version} 已准备好，可在“设置 → 关于 TermVista”中查看。`,
+          toast.info(tu("noticeTitle"), {
+            description: tu("noticeDescription", { version: update.version }),
             duration: 7000,
           });
         } else {
@@ -133,11 +162,11 @@ export function AppShell() {
         }
       } catch (error) {
         // 启动检查保持非阻断；用户可在“关于 TermVista”手动重试。
-        useUpdaterStore.getState().setState({ phase: "error", error: updaterErrorMessage(error) });
+        useUpdaterStore.getState().setState({ phase: "error", error: updaterErrorCode(error) });
       }
     })();
     return () => { canceled = true; };
-  }, [startupReady]);
+  }, [startupReady, tu]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -215,6 +244,13 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [addBlankTab, toggleAi]);
 
+  if (!localeReady) {
+    return <div className="flex h-full items-center justify-center gap-2 bg-background text-foreground" aria-busy="true">
+      <img src="/termvista-icon-v2.png" alt="" className="h-6 w-6 rounded-sm" />
+      <span className="text-sm font-medium">TermVista</span>
+    </div>;
+  }
+
   return (
     <div className="app-shell flex h-full min-h-0 flex-col overflow-hidden" data-theme={theme}>
       <DesktopWorkspace />
@@ -224,14 +260,14 @@ export function AppShell() {
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <Dialog open={pendingEditorClose} onOpenChange={setPendingEditorClose}>
         <DialogContent className="gap-0 p-3">
-          <DialogTitle>仍有未保存的远程文件</DialogTitle>
-          <DialogDescription>退出会清除本次运行中的编辑草稿。先取消并保存需要保留的文件。</DialogDescription>
+          <DialogTitle>{tw("exitDirtyTitle")}</DialogTitle>
+          <DialogDescription>{tw("exitDirtyDescription")}</DialogDescription>
           <ul className="compact-scrollbar max-h-40 space-y-1 overflow-auto rounded-sm border border-border p-2 text-[10px]">
             {dirtyEditorDocuments.slice(0, 8).map((document) => <li key={document.documentId} className="truncate font-mono" title={document.canonicalPath}>{document.displayName} · {document.canonicalPath}</li>)}
-            {dirtyEditorDocuments.length > 8 && <li className="text-muted-foreground">另有 {dirtyEditorDocuments.length - 8} 个未保存文件。</li>}
+            {dirtyEditorDocuments.length > 8 && <li className="text-muted-foreground">{tw("moreUnsaved", { count: dirtyEditorDocuments.length - 8 })}</li>}
           </ul>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" size="xs" className="rounded-sm" onClick={() => setPendingEditorClose(false)}>返回编辑</Button>
+            <Button type="button" variant="outline" size="xs" className="rounded-sm" onClick={() => setPendingEditorClose(false)}>{tw("returnToEditor")}</Button>
             <Button type="button" variant="destructive" size="xs" className="rounded-sm" onClick={() => {
               if (navigator.platform.toLowerCase().startsWith("mac")) {
                 setPendingEditorClose(false);
@@ -244,7 +280,7 @@ export function AppShell() {
                 allowEditorWindowClose.current = false;
                 setPendingEditorClose(true);
               });
-            }}>放弃草稿并退出</Button>
+            }}>{tw("discardAndExit")}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -253,7 +289,7 @@ export function AppShell() {
       <HostKeyDialog />
       <HostKeyMismatchDialog />
       <Toaster theme={theme} position="bottom-right" closeButton duration={3500} />
-      <div className="sr-only" aria-live="polite">AI 助手只会在你检查并确认后发送当前 SSH 会话上下文；生成的命令不会自动执行。</div>
+      <div className="sr-only" aria-live="polite">{tw("aiSafetyAnnouncement")}</div>
     </div>
   );
 }

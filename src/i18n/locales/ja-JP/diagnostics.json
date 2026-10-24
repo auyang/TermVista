@@ -1,0 +1,166 @@
+{
+  "title": "読み取り専用診断",
+  "approveSteps": "診断手順を承認",
+  "evidence": "証拠",
+  "noChanges": "リモートホストに変更を加えません。",
+  "shareApproval": "マスキング済みの証拠を AI に送信することを承認",
+  "panel": {
+    "errors": {
+      "loadTemplates": "診断テンプレートを読み込めませんでした。",
+      "connectFirst": "診断計画を作成する前に SSH に接続してください。",
+      "invalidPort": "1～65535 のポート番号を入力してください。",
+      "createPlan": "読み取り専用の診断計画を作成できませんでした。",
+      "start": "診断を開始できませんでした。",
+      "cancel": "診断を停止できませんでした。",
+      "reportPreview": "レポートプレビューを準備できませんでした。",
+      "report": "診断レポートを生成できませんでした。",
+      "generic": "診断操作に失敗しました。"
+    },
+    "readOnly": "読み取り専用診断",
+    "diagnoseHost": "現在のサーバーを診断",
+    "statusRunning": "確認中",
+    "statusCompleted": "完了",
+    "statusCancelled": "キャンセル済み",
+    "statusQueued": "確認待ち",
+    "collapse": "診断パネルを閉じる",
+    "expand": "診断パネルを開く",
+    "connectHint": "SSH に接続すると、このサーバーの確認計画を作成できます。",
+    "sessionGuard": "接続中のセッション · 診断前にホストキーを再検証します",
+    "service": "サービス名",
+    "port": "対象ポート",
+    "templates": "クイック診断テンプレート",
+    "intentLabel": "問題を自然な言葉で説明",
+    "intentPlaceholder": "例：Nginx が 502 を返すのはなぜですか？",
+    "intentAria": "自然言語による診断内容",
+    "match": "読み取り専用テンプレートを照合",
+    "matchLabel": "一致：{{title}}",
+    "createMatched": "パラメーターを確認して計画を作成",
+    "matchNote": "ローカルテンプレートに一致した後も、対象サービス、ポート、読み取り範囲を確認してください。計画を作成してもリモート確認は開始されません。",
+    "results": "結果 · 証拠 {{count}} 件",
+    "truncated": " · 一部省略",
+    "cancel": "キャンセル",
+    "chooseEvidence": "AI レポート用に証拠 {{id}} を選択",
+    "emptyOutput": "（テキスト出力なし）",
+    "reportSafety": "AI には未送信です。モデルレポートではマスキング済みの内容と送信先を再表示し、別途承認が必要です。拒否した場合、モデルリクエストは送信されません。",
+    "addEvidence": "選択した証拠を会話に追加",
+    "noProvider": "モデル未設定",
+    "prepareReport": "プレビューしてレポートを生成",
+    "preparing": "準備中…",
+    "needSavedKey": "API キーを保存済みのプロバイダーを選択してください。",
+    "working": "処理中…",
+    "shareTitle": "診断証拠の共有を個別に承認",
+    "shareDescription": "サーバー読み取りの承認はモデルへの送信許可ではありません。確認後にのみ API リクエストを開始します。",
+    "host": "SSH ホスト",
+    "fingerprint": "ホストフィンガープリント",
+    "destination": "送信先",
+    "evidence": "証拠",
+    "redactedPreview": " · マスキング済みプレビュー",
+    "actualPayload": "実際の送信内容",
+    "shareWarning": "リモートログやファイルには未検出の秘密情報や悪意ある指示が含まれる可能性があります。内容とプロバイダーを確認してください。レポートは選択した証拠のみを分析し、新しい確認や修復は実行しません。",
+    "decline": "共有を拒否",
+    "sending": "送信中…",
+    "approveReport": "個別に許可してレポートを生成",
+    "cancelPlan": "計画をキャンセル",
+    "startCheck": "読み取り専用チェックを開始",
+    "planTitle": "診断計画",
+    "target": "対象 {{host}}:{{port}} · {{username}}",
+    "verifiedFingerprint": "検証済みフィンガープリント {{fingerprint}}",
+    "allowStep": "{{title}} を許可",
+    "maxOutput": "最大 {{size}} KiB",
+    "readScope": "読み取り範囲：{{scope}}",
+    "sensitiveData": "機密情報：{{value}}",
+    "planSafety": "リモート内容は信頼できない証拠として扱います。この承認は計画内の読み取り専用チェックだけに適用され、モデル送信や修復は行いません。",
+    "contextAuthorized": "選択したコンテキストは読み取り専用分析のために計画へ追加されています。",
+    "noChanges": "リモートホストは変更されません。"
+  },
+  "templates": {
+    "nginx502": {
+      "title": "Nginx 502",
+      "description": "Nginx サービス、最近のログ、待受ポート、ホストリソースを確認します。"
+    },
+    "serviceFailed": {
+      "title": "サービス起動失敗",
+      "description": "指定した systemd サービスの状態、最近のログ、プロセス一覧を読み取ります。"
+    },
+    "diskLow": {
+      "title": "ディスク空き容量不足",
+      "description": "実際のファイルシステム、メモリ、負荷情報を確認します。"
+    },
+    "highCpu": {
+      "title": "CPU 負荷が高い",
+      "description": "現在のリソース情報と CPU 使用率の高いプロセスを読み取ります。"
+    },
+    "portUnbound": {
+      "title": "ポート未待受",
+      "description": "指定した TCP/UDP ポートが待受状態か確認します。"
+    },
+    "currentHost": {
+      "title": "現在のサーバーを診断",
+      "description": "システム情報、リソース、プロセス、待受ポートを確認します。"
+    }
+  },
+  "steps": {
+    "systemInfo": {
+      "title": "システム情報",
+      "why": "OS、ホスト名、稼働時間、負荷を確認します。",
+      "sensitive": "ホスト名は機密インフラ情報に該当する場合があります。",
+      "scope": "uname、hostname、uptime"
+    },
+    "resourceSnapshot": {
+      "title": "リソーススナップショット",
+      "why": "メモリ、負荷、ファイルシステムを確認します。可能な場合は現在の監視スナップショットを再利用します。",
+      "sensitive": "マウントポイント名からディレクトリ構造が推測される場合があります。",
+      "scope": "監視スナップショット、または /proc/meminfo、/proc/loadavg、df -P -k"
+    },
+    "processList": {
+      "title": "プロセス一覧",
+      "why": "環境変数や完全なコマンドラインを読まず、リソース使用量の多いプロセスを確認します。",
+      "sensitive": "プロセス名と PID から実行サービスが特定される場合があります。",
+      "scope": "{{sort}} 順、最大 {{count}} プロセス"
+    },
+    "serviceInspect": {
+      "title": "サービス状態",
+      "why": "指定した systemd サービスの状態フィールドのみ読み取ります。",
+      "sensitive": "サービス名と起動状態は機密運用情報に該当する場合があります。",
+      "scope": "systemctl show：{{service}}"
+    },
+    "listeningPorts": {
+      "title": "待受ポート",
+      "why": "プロセス詳細や sudo を使わず、待受ソケットを列挙します。",
+      "sensitive": "待受アドレスとポートは機密ネットワーク情報に該当する場合があります。",
+      "scope": "{{protocol}} 待受ポート、対象 {{port}}",
+      "scopeMany": "最大 {{count}} 件の {{protocol}} 待受情報"
+    },
+    "recentLogs": {
+      "title": "最近のログ",
+      "why": "対象サービスの直近の限られた行数だけを読み、ログ内容を信頼できないデータとして扱います。",
+      "sensitive": "ログにアカウント、パス、トークンが含まれる場合があります。共有前にマスキングして確認します。",
+      "scope": "journalctl：{{service}} の直近 {{count}} 行"
+    },
+    "fileExcerpt": {
+      "title": "SFTP ファイル抜粋",
+      "why": "SFTP で選択した通常のテキストファイルのみ読み取ります。",
+      "sensitive": "ファイルに機密情報が含まれる可能性があり、共有には個別確認が必要です。",
+      "scope": "{{path}}、最大 {{size}} KiB"
+    },
+    "terminalSelection": {
+      "title": "ターミナル選択範囲",
+      "why": "ユーザーが明示的に選択したテキストだけを使用し、スクロールバックは読み取りません。",
+      "sensitive": "選択範囲は信頼できない参照データとして扱い、モデル共有前に個別プレビューします。",
+      "scope": "選択したテキスト：{{count}} バイト（最大 16 KiB）"
+    }
+  },
+  "statuses": {
+    "queued": "待機中",
+    "running": "実行中",
+    "completed": "完了",
+    "cancelled": "キャンセル済み",
+    "failed": "失敗",
+    "success": "成功",
+    "unsupported": "未対応",
+    "permissionDenied": "権限がありません",
+    "timeout": "タイムアウト",
+    "notRun": "未実行",
+    "error": "エラー"
+  }
+}

@@ -19,8 +19,10 @@ import { resolveEditorLanguage } from "@/features/editor/languageRegistry";
 import { closeRemoteDocument, openRemoteDocument } from "@/features/editor/remoteEditorBridge";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { TunnelManagerDialog } from "@/features/tunnels/TunnelManagerDialog";
+import { useTranslation } from "react-i18next";
 
 export function DesktopWorkspace() {
+  const { t } = useTranslation("workspace");
   const tabs = useWorkspaceStore((state) => state.tabs);
   const activeTabId = useWorkspaceStore((state) => state.activeTabId);
   const aiOpen = useWorkspaceStore((state) => state.aiOpen);
@@ -82,7 +84,7 @@ export function DesktopWorkspace() {
 
   const openRemoteFile = async (requestedSessionId: string, remotePath: string) => {
     if (activeTab?.mode !== "ssh" || activeSshSession?.state !== "connected" || activeSshSession.sessionId !== requestedSessionId) {
-      toast.error("当前 SSH 会话已变化，请刷新 SFTP 后重试打开文件。");
+      toast.error(t("sessionChanged"));
       return;
     }
     try {
@@ -99,12 +101,12 @@ export function DesktopWorkspace() {
       const result = useEditorStore.getState().open(document, resolveEditorLanguage(document.canonicalPath));
       if (result.overLimit) {
         await closeRemoteDocument(document.documentId).catch(() => undefined);
-        toast.warning("最多同时打开 20 个远程文件。请先关闭部分编辑标签。");
+        toast.warning(t("editorLimit"));
         return;
       }
-      if (document.previewOnly) toast.message(document.readOnlyReason ?? "文件以只读预览方式打开。");
-    } catch (error) {
-      toast.error(typeof error === "string" ? error : "无法打开远程文件；请确认文件类型、大小和访问权限。");
+      if (document.previewOnly) toast.message(t("readOnlyPreview"));
+    } catch {
+      toast.error(t("openRemoteFailed"));
     }
   };
 
@@ -120,7 +122,7 @@ export function DesktopWorkspace() {
         <ResizablePanel id="monitor" panelRef={monitorRef} defaultSize="20%" minSize="176px" maxSize="360px" collapsible collapsedSize="40px" collapsedThreshold="96px" className="min-w-0 overflow-hidden">
           <MonitorSidebar collapsed={monitorCollapsed} onToggle={() => setMonitorCollapsed(!monitorCollapsed)} />
         </ResizablePanel>
-        <ResizableHandle aria-label="调整监控面板宽度" />
+        <ResizableHandle aria-label={t("resizeMonitor")} />
         <ResizablePanel id="workspace" defaultSize="85.75%" minSize="600px" className="min-w-0 overflow-hidden">
           <ResizablePanelGroup
             orientation="horizontal"
@@ -152,7 +154,7 @@ export function DesktopWorkspace() {
                       </div>
                     </RemoteEditorWorkspace>
                   </ResizablePanel>
-                  <ResizableHandle aria-label="调整终端和 SFTP 面板高度" />
+                  <ResizableHandle aria-label={t("resizeTerminalSftp")} />
                   <ResizablePanel id="sftp" panelRef={sftpRef} defaultSize="58%" minSize="160px" collapsible collapsedSize="32px" collapsedThreshold="80px" className="min-h-0 overflow-hidden">
                     <SftpPane key={activeTab?.id ?? "empty"} collapsed={sftpCollapsed} onToggleCollapse={() => setSftpCollapsed(!sftpCollapsed)} onOpenRemoteFile={(sessionId, path) => void openRemoteFile(sessionId, path)} />
                   </ResizablePanel>
@@ -160,7 +162,7 @@ export function DesktopWorkspace() {
               </div>
             </ResizablePanel>
             {aiOpen && !narrow && <>
-              <ResizableHandle aria-label="调整 AI 面板宽度" />
+              <ResizableHandle aria-label={t("resizeAi")} />
               <ResizablePanel id="assistant" defaultSize="29%" minSize="300px" maxSize="480px" className="min-w-0 overflow-hidden">
                 <AiSidePanel />
               </ResizablePanel>

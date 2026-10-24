@@ -5,6 +5,14 @@ export type SortableProfile = {
   sortOrder?: number;
 };
 
+export const DEFAULT_UNGROUPED_GROUP = "__ungrouped__";
+
+const LEGACY_DEFAULT_UNGROUPED_GROUP = "\u9ED8\u8BA4\u5206\u7EC4";
+
+export function isDefaultUngroupedGroup(group: string | undefined) {
+  return !group || group === DEFAULT_UNGROUPED_GROUP || group === LEGACY_DEFAULT_UNGROUPED_GROUP;
+}
+
 export function profileDropInsertionIndex(
   profiles: SortableProfile[],
   draggedId: string,

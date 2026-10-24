@@ -1,0 +1,166 @@
+{
+  "title": "Read-only Diagnostics",
+  "approveSteps": "Approve Diagnostic Steps",
+  "evidence": "Evidence",
+  "noChanges": "No changes will be made to the remote host.",
+  "shareApproval": "Approve sending redacted evidence to AI",
+  "panel": {
+    "errors": {
+      "loadTemplates": "Could not load diagnostic templates.",
+      "connectFirst": "Connect over SSH before creating a diagnostic plan.",
+      "invalidPort": "Enter a port from 1 to 65535.",
+      "createPlan": "Could not create the read-only diagnostic plan.",
+      "start": "Could not start the diagnostic.",
+      "cancel": "Could not stop the diagnostic.",
+      "reportPreview": "Could not prepare the report preview.",
+      "report": "Could not generate the diagnostic report.",
+      "generic": "The diagnostic operation failed."
+    },
+    "readOnly": "Read-only diagnostics",
+    "diagnoseHost": "Diagnose current server",
+    "statusRunning": "Checking",
+    "statusCompleted": "Completed",
+    "statusCancelled": "Canceled",
+    "statusQueued": "Queued",
+    "collapse": "Collapse diagnostics",
+    "expand": "Expand diagnostics",
+    "connectHint": "Connect over SSH to create a check plan for this server.",
+    "sessionGuard": "Connected session · host key will be revalidated before diagnostics",
+    "service": "Service name",
+    "port": "Target port",
+    "templates": "Quick diagnostic templates",
+    "intentLabel": "Describe the issue in natural language",
+    "intentPlaceholder": "For example: Why is Nginx returning 502?",
+    "intentAria": "Natural-language diagnostic issue",
+    "match": "Match read-only template",
+    "matchLabel": "Matched: {{title}}",
+    "createMatched": "Check parameters and create plan",
+    "matchNote": "After matching a local template, review the target service, port, and read scope. Creating a plan does not start remote checks.",
+    "results": "Results · {{count}} evidence item(s)",
+    "truncated": " · truncated",
+    "cancel": "Cancel",
+    "chooseEvidence": "Select evidence {{id}} for the AI report",
+    "emptyOutput": "(No text output)",
+    "reportSafety": "Not sent to AI. A model report will show redacted content and its destination again and require separate approval. Declining will not send a model request.",
+    "addEvidence": "Add selected evidence to conversation",
+    "noProvider": "No model configured",
+    "prepareReport": "Preview and generate report",
+    "preparing": "Preparing…",
+    "needSavedKey": "Choose a provider with a saved API key first.",
+    "working": "Working…",
+    "shareTitle": "Separately approve sharing diagnostic evidence",
+    "shareDescription": "Approval to read server data does not approve sending it to a model. An API request starts only after you confirm.",
+    "host": "SSH host",
+    "fingerprint": "Host fingerprint",
+    "destination": "Destination",
+    "evidence": "Evidence",
+    "redactedPreview": " · redacted preview",
+    "actualPayload": "Actual payload",
+    "shareWarning": "Remote logs and files may contain secrets or malicious prompts that were not detected. Review the content and provider. The report analyzes only the selected evidence; it starts no new checks and performs no repairs.",
+    "decline": "Decline sharing",
+    "sending": "Sending…",
+    "approveReport": "Approve and generate report",
+    "cancelPlan": "Cancel plan",
+    "startCheck": "Start read-only checks",
+    "planTitle": "Diagnostic plan",
+    "target": "Target {{host}}:{{port}} · {{username}}",
+    "verifiedFingerprint": "Verified fingerprint {{fingerprint}}",
+    "allowStep": "Allow {{title}}",
+    "maxOutput": "Up to {{size}} KiB",
+    "readScope": "Read scope: {{scope}}",
+    "sensitiveData": "Sensitive data: {{value}}",
+    "planSafety": "Remote content is untrusted evidence. Approval applies only to the read-only checks in this plan; it does not send data to a model or perform repairs.",
+    "contextAuthorized": "Selected context is attached to this plan for read-only analysis.",
+    "noChanges": "No changes will be made to the remote host."
+  },
+  "templates": {
+    "nginx502": {
+      "title": "Nginx 502",
+      "description": "Check Nginx service state, recent logs, listening ports, and host resources."
+    },
+    "serviceFailed": {
+      "title": "Service failed to start",
+      "description": "Read the selected systemd service state, recent logs, and process list."
+    },
+    "diskLow": {
+      "title": "Low disk space",
+      "description": "Check real filesystems, memory, and load information."
+    },
+    "highCpu": {
+      "title": "High CPU load",
+      "description": "Read the current resource snapshot and top CPU processes."
+    },
+    "portUnbound": {
+      "title": "Port not listening",
+      "description": "Check whether the selected TCP/UDP port is listening."
+    },
+    "currentHost": {
+      "title": "Diagnose current server",
+      "description": "Review system information, resources, processes, and listening ports."
+    }
+  },
+  "steps": {
+    "systemInfo": {
+      "title": "System information",
+      "why": "Identify the operating system, hostname, uptime, and load.",
+      "sensitive": "The hostname may identify sensitive infrastructure.",
+      "scope": "uname, hostname, uptime"
+    },
+    "resourceSnapshot": {
+      "title": "Resource snapshot",
+      "why": "Review memory, load, and filesystem use; reuse the current monitor snapshot when available.",
+      "sensitive": "Mount-point names may reveal directory structure.",
+      "scope": "Monitor snapshot or /proc/meminfo, /proc/loadavg, df -P -k"
+    },
+    "processList": {
+      "title": "Process list",
+      "why": "Review resource-heavy processes without reading environment variables or full command lines.",
+      "sensitive": "Process names and PIDs may reveal running services.",
+      "scope": "Sorted by {{sort}}, up to {{count}} processes"
+    },
+    "serviceInspect": {
+      "title": "Service status",
+      "why": "Read only the selected systemd service status fields.",
+      "sensitive": "Service names and startup state may be sensitive operational information.",
+      "scope": "systemctl show: {{service}}"
+    },
+    "listeningPorts": {
+      "title": "Listening ports",
+      "why": "List listening sockets without process details or sudo.",
+      "sensitive": "Listen addresses and ports may be sensitive network information.",
+      "scope": "{{protocol}} listening port {{port}}",
+      "scopeMany": "Up to {{count}} {{protocol}} listening entries"
+    },
+    "recentLogs": {
+      "title": "Recent logs",
+      "why": "Read a limited number of recent service lines and treat log content as untrusted.",
+      "sensitive": "Logs may contain accounts, paths, or tokens; content is redacted and previewed before sharing.",
+      "scope": "journalctl: {{service}}, latest {{count}} lines"
+    },
+    "fileExcerpt": {
+      "title": "SFTP file excerpt",
+      "why": "Read only the regular text file just selected in SFTP.",
+      "sensitive": "File content may be confidential; sharing requires separate confirmation.",
+      "scope": "{{path}}, up to {{size}} KiB"
+    },
+    "terminalSelection": {
+      "title": "Terminal selection",
+      "why": "Use only the terminal text explicitly selected by the user; do not read terminal scrollback.",
+      "sensitive": "Selected text is untrusted reference data and is previewed separately before model sharing.",
+      "scope": "User-selected text: {{count}} bytes (up to 16 KiB)"
+    }
+  },
+  "statuses": {
+    "queued": "Queued",
+    "running": "Running",
+    "completed": "Completed",
+    "cancelled": "Canceled",
+    "failed": "Failed",
+    "success": "Succeeded",
+    "unsupported": "Unsupported",
+    "permissionDenied": "Permission denied",
+    "timeout": "Timed out",
+    "notRun": "Not run",
+    "error": "Error"
+  }
+}

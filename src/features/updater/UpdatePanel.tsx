@@ -13,8 +13,9 @@ import { useTunnelStore } from "@/features/tunnels/tunnelStore";
 import { inspectUpdateInstallGuard, type UpdateInstallGuard } from "./installGuard";
 import { useUpdateMaintenanceTaskStore } from "./maintenanceTasks";
 import { checkForUpdate, closePendingUpdate, downloadUpdate, installDownloadedUpdate, relaunchApplication } from "./updaterBridge";
-import { updaterErrorMessage } from "./updaterErrors";
+import { updaterErrorCode } from "./updaterErrors";
 import { useUpdaterStore } from "./updaterStore";
+import { useTranslation } from "react-i18next";
 
 type UpdatePanelProps = {
   metadata: AppMetadata | null;
@@ -29,6 +30,9 @@ function formatBytes(bytes: number): string {
 }
 
 export function UpdatePanel({ metadata }: UpdatePanelProps) {
+  const { t, i18n } = useTranslation("updater");
+  const tDynamic = (key: string, options?: Record<string, unknown>): string =>
+    String(i18n.t(key as never, { ns: "updater", ...options } as never));
   const phase = useUpdaterStore((state) => state.phase);
   const update = useUpdaterStore((state) => state.update);
   const downloadedBytes = useUpdaterStore((state) => state.downloadedBytes);
@@ -58,14 +62,14 @@ export function UpdatePanel({ metadata }: UpdatePanelProps) {
     if (!configured || busy) return;
     setState({ phase: "checking", error: null, message: null });
     try {
-      const found = await checkForUpdate(metadata?.platform ?? "未知平台", metadata?.arch ?? "unknown");
+      const found = await checkForUpdate(metadata?.platform ?? "unknown", metadata?.arch ?? "unknown");
       if (!found) {
         setState({ phase: "upToDate", update: null, downloadedBytes: 0, contentLength: null, error: null });
         return;
       }
       setState({ phase: "available", update: found, downloadedBytes: 0, contentLength: null, error: null });
     } catch (reason) {
-      setState({ phase: "error", error: updaterErrorMessage(reason), message: null });
+      setState({ phase: "error", error: updaterErrorCode(reason), message: null });
     }
   }
 
@@ -81,9 +85,9 @@ export function UpdatePanel({ metadata }: UpdatePanelProps) {
           setState({ phase: "downloading", downloadedBytes: current + event.data.chunkLength });
         }
       });
-      setState({ phase: "downloaded", error: null, message: "下载完成。更新尚未安装；安装前还会再次检查当前会话和后台任务。" });
+      setState({ phase: "downloaded", error: null, message: "downloadedNotInstalled" });
     } catch (reason) {
-      setState({ phase: "error", error: updaterErrorMessage(reason), message: null });
+      setState({ phase: "error", error: updaterErrorCode(reason), message: null });
     }
   }
 
@@ -92,7 +96,7 @@ export function UpdatePanel({ metadata }: UpdatePanelProps) {
     setState({
       phase: "downloaded",
       error: null,
-      message: "请先完成以下操作，再安装更新。",
+      message: "completeBeforeInstall",
     });
     setInstallConfirmation(null);
     return true;
@@ -109,7 +113,7 @@ export function UpdatePanel({ metadata }: UpdatePanelProps) {
     }
     if (confirmed && (initial.activeSshSessions > confirmed.ssh || initial.activeTunnels > confirmed.tunnels)) {
       setInstallConfirmation({ ssh: initial.activeSshSessions, tunnels: initial.activeTunnels });
-      setState({ phase: "downloaded", message: "活动会话数量发生变化，请重新确认安装影响。" });
+      setState({ phase: "downloaded", message: "sessionCountChanged" });
       return;
     }
 
@@ -121,27 +125,27 @@ export function UpdatePanel({ metadata }: UpdatePanelProps) {
         || finalCheck.activeSshSessions > confirmed.ssh
         || finalCheck.activeTunnels > confirmed.tunnels)
     ) {
-      setState({ phase: "downloaded", message: "活动会话数量发生变化，请重新确认安装影响。" });
+      setState({ phase: "downloaded", message: "sessionCountChanged" });
       setInstallConfirmation({ ssh: finalCheck.activeSshSessions, tunnels: finalCheck.activeTunnels });
       return;
     }
 
     setInstallConfirmation(null);
-    setState({ phase: "installing", error: null, message: "正在启动系统更新安装程序…" });
+    setState({ phase: "installing", error: null, message: "startingInstaller" });
     try {
       const outcome = await installDownloadedUpdate();
       if (outcome === "restartRequired") {
         setAllowManualRelaunch(true);
-        setState({ phase: "needsRestart", message: "更新安装已完成，请重新启动 TermVista 才能使用新版本。" });
+        setState({ phase: "needsRestart", message: "installedRestartRequired" });
       } else if (outcome === "installerStarted") {
         setAllowManualRelaunch(false);
-        setState({ phase: "needsRestart", message: "系统安装程序已接管更新流程。请按提示完成安装；应用可能关闭并由安装程序重新启动。" });
+        setState({ phase: "needsRestart", message: "installerTookOver" });
       } else {
         setAllowManualRelaunch(false);
-        setState({ phase: "installing", message: "更新已安装，TermVista 正在重新启动。" });
+        setState({ phase: "installing", message: "installedRestarting" });
       }
     } catch (reason) {
-      setState({ phase: "error", error: updaterErrorMessage(reason), message: null });
+      setState({ phase: "error", error: updaterErrorCode(reason), message: null });
     }
   }
 
@@ -156,7 +160,7 @@ export function UpdatePanel({ metadata }: UpdatePanelProps) {
     try {
       await relaunchApplication();
     } catch (reason) {
-      setState({ phase: "needsRestart", message: updaterErrorMessage(reason) });
+      setState({ phase: "error", error: updaterErrorCode(reason), message: null });
     }
   }
 
@@ -170,12 +174,12 @@ export function UpdatePanel({ metadata }: UpdatePanelProps) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             {configured ? <ShieldCheck size={13} className="text-success" /> : <ShieldAlert size={13} className="text-muted-foreground" />}
-            <h3 id="update-panel-heading" className="text-[11px] font-semibold text-foreground">软件更新</h3>
+            <h3 id="update-panel-heading" className="text-[11px] font-semibold text-foreground">{t("title")}</h3>
           </div>
           <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
             {configured
-              ? "检查稳定版更新。下载不会自动安装，安装前会检查未完成的编辑、传输和运维任务。"
-              : metadata?.updaterConfigReason ?? (desktopRuntime ? "在线更新配置不可用。" : "请在 TermVista 桌面应用中检查更新。")}
+              ? t("description")
+              : t(desktopRuntime ? "unavailable" : "desktopOnly")}
           </p>
         </div>
         <Button
@@ -186,37 +190,37 @@ export function UpdatePanel({ metadata }: UpdatePanelProps) {
           disabled={!configured || busy}
           onClick={() => void checkUpdates()}
         >
-          {phase === "checking" ? <><LoaderCircle size={12} className="animate-spin" />检查中…</> : <><RefreshCw size={11} />检查更新</>}
+          {phase === "checking" ? <><LoaderCircle size={12} className="animate-spin" />{t("checking")}</> : <><RefreshCw size={11} />{t("check")}</>}
         </Button>
       </div>
 
-      {phase === "upToDate" && <p role="status" className="mt-2 text-[10px] text-muted-foreground">当前版本已是最新版本。</p>}
+      {phase === "upToDate" && <p role="status" className="mt-2 text-[10px] text-muted-foreground">{t("upToDate")}</p>}
       {phase === "available" && update && <div className="mt-3 border-t border-border/70 pt-3">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-foreground">
           <strong>TermVista {update.version}</strong>
-          <span className="text-muted-foreground">当前 {update.currentVersion}</span>
+          <span className="text-muted-foreground">{t("currentVersion", { version: update.currentVersion })}</span>
           <span className="text-muted-foreground">{update.platform} · {update.arch}</span>
-          {update.date && <time className="text-muted-foreground" dateTime={update.date}>{new Date(update.date).toLocaleDateString()}</time>}
+          {update.date && <time className="text-muted-foreground" dateTime={update.date}>{new Date(update.date).toLocaleDateString(i18n.resolvedLanguage)}</time>}
         </div>
         <div className="compact-scrollbar mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-sm border border-border bg-background/60 p-2 text-[10px] leading-4 text-foreground">
-          {update.notes.trim() || "此版本未提供更新说明。"}
+          {update.notes.trim() || t("noReleaseNotes")}
         </div>
         <div className="mt-2 flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void dismissUpdate()}>稍后</Button>
-          <Button type="button" size="sm" className="h-7 rounded-sm text-[10px]" disabled={busy} onClick={() => void downloadUpdatePackage()}><Download size={11} />下载更新</Button>
+          <Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void dismissUpdate()}>{t("later")}</Button>
+          <Button type="button" size="sm" className="h-7 rounded-sm text-[10px]" disabled={busy} onClick={() => void downloadUpdatePackage()}><Download size={11} />{t("download")}</Button>
         </div>
       </div>}
 
       {phase === "downloading" && <div className="mt-3 border-t border-border/70 pt-3" aria-live="polite">
         <div className="mb-1 flex justify-between gap-2 text-[10px] text-muted-foreground">
-          <span>正在下载 TermVista {update?.version}</span>
+          <span>{t("downloading", { version: update?.version })}</span>
           <span>{progressPercent === null
-            ? formatBytes(downloadedBytes) + " 已下载 · 总大小未知"
-            : progressPercent + "% · " + formatBytes(downloadedBytes) + " / " + formatBytes(contentLength ?? 0)}</span>
+            ? t("downloadedUnknownSize", { size: formatBytes(downloadedBytes) })
+            : t("downloadProgress", { percent: progressPercent, downloaded: formatBytes(downloadedBytes), total: formatBytes(contentLength ?? 0) })}</span>
         </div>
         <div
           role="progressbar"
-          aria-label="更新下载进度"
+          aria-label={t("downloadProgressLabel")}
           aria-valuemin={0}
           aria-valuemax={progressPercent === null ? undefined : 100}
           aria-valuenow={progressPercent === null ? undefined : progressPercent}
@@ -227,37 +231,40 @@ export function UpdatePanel({ metadata }: UpdatePanelProps) {
       </div>}
 
       {phase === "downloaded" && <div className="mt-3 border-t border-border/70 pt-3">
-        <p role="status" className="text-[10px] leading-4 text-foreground">{message ?? "下载完成。更新尚未安装。"}</p>
+        <p role="status" className="text-[10px] leading-4 text-foreground">{tDynamic(message ?? "downloadedNotInstalledShort")}</p>
         {guard.blockers.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-4 text-[10px] text-destructive">
-          {guard.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+          {guard.blockers.map((blocker) => <li key={blocker.key}>{tDynamic(`blockers.${blocker.key}`, {
+            ...(blocker.count === undefined ? {} : { count: blocker.count }),
+            ...(blocker.labels ? { labels: blocker.labels.map((label) => tDynamic(`tasks.${label}`)).join(", ") } : {}),
+          })}</li>)}
         </ul>}
-        <p className="mt-2 text-[10px] leading-4 text-muted-foreground">安装会重启客户端。远程 shell 内的进程状态无法确认，客户端不会恢复远端进程。</p>
+        <p className="mt-2 text-[10px] leading-4 text-muted-foreground">{t("installRestartNotice")}</p>
         <div className="mt-2 flex justify-end gap-2">
-          <Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void dismissUpdate()}>稍后</Button>
-          <Button type="button" size="sm" className="h-7 rounded-sm text-[10px]" disabled={busy || guard.blockers.length > 0} onClick={() => void installUpdate()}><Download size={11} />安装并重启</Button>
+          <Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void dismissUpdate()}>{t("later")}</Button>
+          <Button type="button" size="sm" className="h-7 rounded-sm text-[10px]" disabled={busy || guard.blockers.length > 0} onClick={() => void installUpdate()}><Download size={11} />{t("installAndRestart")}</Button>
         </div>
       </div>}
 
-      {phase === "installing" && <p role="status" className="mt-3 border-t border-border/70 pt-3 text-[10px] text-muted-foreground">{message ?? "正在安装更新…"}</p>}
+      {phase === "installing" && <p role="status" className="mt-3 border-t border-border/70 pt-3 text-[10px] text-muted-foreground">{message ? tDynamic(message) : t("installing")}</p>}
       {phase === "needsRestart" && <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
-        <p role="status" className="text-[10px] leading-4 text-muted-foreground">{message}</p>
-        {allowManualRelaunch && <Button type="button" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void manualRelaunch()}>重新启动 TermVista</Button>}
+        <p role="status" className="text-[10px] leading-4 text-muted-foreground">{message ? tDynamic(message) : null}</p>
+        {allowManualRelaunch && <Button type="button" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void manualRelaunch()}>{t("relaunch")}</Button>}
       </div>}
       {phase === "error" && <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
-        <p className="min-w-0 flex-1 text-[10px] leading-4 text-destructive">{error ?? "更新失败，请重试。"}</p>
-        <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 rounded-sm text-[10px]" onClick={() => void checkUpdates()}>重试</Button>
+        <p className="min-w-0 flex-1 text-[10px] leading-4 text-destructive">{tDynamic(`errors.${error ?? "unknown"}`)}</p>
+        <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 rounded-sm text-[10px]" onClick={() => void checkUpdates()}>{t("retry")}</Button>
       </div>}
     </section>
 
     <Dialog open={installConfirmation !== null} onOpenChange={(open) => { if (!open) setInstallConfirmation(null); }}>
       <DialogContent className="gap-0 p-4">
-        <DialogTitle>确认安装更新</DialogTitle>
+        <DialogTitle>{t("confirmInstallTitle")}</DialogTitle>
         <DialogDescription className="pt-2 text-[11px] leading-5">
-          当前有 {installConfirmation?.ssh ?? 0} 个 SSH 会话和 {installConfirmation?.tunnels ?? 0} 条端口转发。安装会中断客户端终端与隧道。远程命令可能仍在服务器运行；TermVista 不会恢复远端进程。
+          {t("confirmInstallDescription", { ssh: installConfirmation?.ssh ?? 0, tunnels: installConfirmation?.tunnels ?? 0 })}
         </DialogDescription>
         <div className="mt-3 flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => setInstallConfirmation(null)}>稍后</Button>
-          <Button type="button" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void installUpdate(installConfirmation)}>确认并安装</Button>
+          <Button type="button" variant="outline" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => setInstallConfirmation(null)}>{t("later")}</Button>
+          <Button type="button" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => void installUpdate(installConfirmation)}>{t("confirmAndInstall")}</Button>
         </div>
       </DialogContent>
     </Dialog>

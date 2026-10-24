@@ -48,13 +48,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
         return updated;
       } catch (error) {
         const message = errorText(error);
-        if (message.includes("其他窗口更新")) {
-          try {
-            const latest = await getSettings();
-            set({ settings: latest, loaded: true });
-          } catch {
-            // 保留旧值和原始错误，不能显示保存成功。
-          }
+        try {
+          const latest = await getSettings();
+          set({ settings: latest, loaded: true });
+        } catch {
+          // 保留旧值和原始错误，不能显示保存成功。
         }
         set({ savingSection: null, error: message });
         throw error;

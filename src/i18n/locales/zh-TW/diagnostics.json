@@ -1,0 +1,166 @@
+{
+  "title": "唯讀診斷",
+  "approveSteps": "核准診斷步驟",
+  "evidence": "證據",
+  "noChanges": "不會修改遠端主機。",
+  "shareApproval": "核准向 AI 傳送已遮蔽敏感資訊的證據",
+  "panel": {
+    "errors": {
+      "loadTemplates": "讀取診斷範本失敗。",
+      "connectFirst": "請先連線 SSH，再建立診斷計畫。",
+      "invalidPort": "請輸入 1 到 65535 之間的連接埠。",
+      "createPlan": "無法建立唯讀診斷計畫。",
+      "start": "無法開始診斷。",
+      "cancel": "無法停止診斷。",
+      "reportPreview": "無法準備報告預覽。",
+      "report": "無法產生診斷報告。",
+      "generic": "診斷操作失敗。"
+    },
+    "readOnly": "唯讀診斷",
+    "diagnoseHost": "診斷目前伺服器",
+    "statusRunning": "檢查中",
+    "statusCompleted": "已完成",
+    "statusCancelled": "已取消",
+    "statusQueued": "待查看",
+    "collapse": "收合診斷入口",
+    "expand": "展開診斷入口",
+    "connectHint": "連線 SSH 後可為目前伺服器建立檢查計畫。",
+    "sessionGuard": "目前已連線工作階段 · 診斷前會再次驗證主機金鑰",
+    "service": "服務名稱",
+    "port": "目標連接埠",
+    "templates": "快速診斷範本",
+    "intentLabel": "以自然語言描述問題",
+    "intentPlaceholder": "例如：為什麼 Nginx 回傳 502？",
+    "intentAria": "自然語言診斷問題",
+    "match": "比對唯讀範本",
+    "matchLabel": "符合：{{title}}",
+    "createMatched": "檢查參數並建立計畫",
+    "matchNote": "符合本機範本後仍須檢查目標服務、連接埠與讀取範圍；建立計畫不會啟動遠端檢查。",
+    "results": "檢查結果 · {{count}} 項證據",
+    "truncated": " · 有截斷",
+    "cancel": "取消",
+    "chooseEvidence": "選取證據 {{id}} 用於 AI 報告",
+    "emptyOutput": "（沒有文字輸出）",
+    "reportSafety": "尚未傳送給 AI。模型報告會再次顯示遮蔽內容與傳送目標，並需另外授權；拒絕後不會發出模型請求。",
+    "addEvidence": "將所選證據加入對話",
+    "noProvider": "尚未設定模型",
+    "prepareReport": "預覽並產生報告",
+    "preparing": "準備中…",
+    "needSavedKey": "請先設定並選擇已儲存 API Key 的模型服務商。",
+    "working": "正在處理…",
+    "shareTitle": "另外確認是否分享診斷證據",
+    "shareDescription": "授權讀取伺服器不代表同意傳送給模型；確認後才會發出 API 請求。",
+    "host": "SSH 主機",
+    "fingerprint": "主機指紋",
+    "destination": "傳送目標",
+    "evidence": "證據",
+    "redactedPreview": " · 已遮蔽預覽",
+    "actualPayload": "實際傳送內容",
+    "shareWarning": "遠端記錄和檔案可能包含未識別的秘密或惡意提示。請檢查內容與服務商；報告只分析目前選取的證據，不會觸發新檢查或自動修復。",
+    "decline": "拒絕分享",
+    "sending": "正在傳送…",
+    "approveReport": "另外授權並產生報告",
+    "cancelPlan": "取消計畫",
+    "startCheck": "開始唯讀檢查",
+    "planTitle": "檢查計畫",
+    "target": "目標 {{host}}:{{port}} · {{username}}",
+    "verifiedFingerprint": "已驗證指紋 {{fingerprint}}",
+    "allowStep": "允許 {{title}}",
+    "maxOutput": "最多 {{size}} KiB",
+    "readScope": "讀取範圍：{{scope}}",
+    "sensitiveData": "敏感資訊：{{value}}",
+    "planSafety": "遠端內容僅視為不可信證據；這項授權只允許目前計畫中的唯讀檢查，不會傳送給模型或執行修復。",
+    "contextAuthorized": "已將你選取的內容加入此計畫，僅用於唯讀分析。",
+    "noChanges": "不會修改遠端主機。"
+  },
+  "templates": {
+    "nginx502": {
+      "title": "Nginx 502",
+      "description": "檢查 Nginx 服務、近期記錄、監聽連接埠和主機資源。"
+    },
+    "serviceFailed": {
+      "title": "服務無法啟動",
+      "description": "讀取指定 systemd 服務狀態、近期記錄和程序清單。"
+    },
+    "diskLow": {
+      "title": "磁碟空間不足",
+      "description": "檢查實際檔案系統、記憶體和負載資訊。"
+    },
+    "highCpu": {
+      "title": "CPU 負載高",
+      "description": "讀取目前資源快照和 CPU 使用率較高的程序。"
+    },
+    "portUnbound": {
+      "title": "連接埠未監聽",
+      "description": "檢查指定 TCP/UDP 連接埠是否正在監聽。"
+    },
+    "currentHost": {
+      "title": "診斷目前伺服器",
+      "description": "查看系統資訊、資源、程序和監聽連接埠。"
+    }
+  },
+  "steps": {
+    "systemInfo": {
+      "title": "系統資訊",
+      "why": "識別作業系統、主機名稱、運作時間和負載。",
+      "sensitive": "主機名稱可能屬於敏感基礎架構資訊。",
+      "scope": "uname、hostname、uptime"
+    },
+    "resourceSnapshot": {
+      "title": "資源快照",
+      "why": "檢視記憶體、負載和檔案系統使用狀況；優先重用目前監控快照。",
+      "sensitive": "掛載點名稱可能透露目錄結構。",
+      "scope": "監控快照，或 /proc/meminfo、/proc/loadavg、df -P -k"
+    },
+    "processList": {
+      "title": "程序清單",
+      "why": "查看資源使用量較高的程序，不讀取環境變數或完整命令列。",
+      "sensitive": "程序名稱和 PID 可能透露執行中的服務。",
+      "scope": "依 {{sort}} 排序，最多 {{count}} 個程序"
+    },
+    "serviceInspect": {
+      "title": "服務狀態",
+      "why": "只讀取指定 systemd 服務的狀態欄位。",
+      "sensitive": "服務名稱與啟動狀態可能屬於敏感維運資訊。",
+      "scope": "systemctl show：{{service}}"
+    },
+    "listeningPorts": {
+      "title": "監聽連接埠",
+      "why": "列出監聽中的通訊端，不讀取程序詳細資料，也不需要 sudo。",
+      "sensitive": "監聽位址和連接埠可能屬於敏感網路資訊。",
+      "scope": "{{protocol}} 監聽連接埠，目標 {{port}}",
+      "scopeMany": "最多 {{count}} 筆 {{protocol}} 監聽項目"
+    },
+    "recentLogs": {
+      "title": "近期記錄",
+      "why": "僅讀取該服務有限的近期行數，並將記錄內容視為不可信資料。",
+      "sensitive": "記錄可能含帳號、路徑或權杖；外傳前會遮蔽並供你預覽。",
+      "scope": "journalctl：{{service}} 最近 {{count}} 行"
+    },
+    "fileExcerpt": {
+      "title": "SFTP 檔案摘錄",
+      "why": "只讀取你剛從 SFTP 選取的一般文字檔。",
+      "sensitive": "檔案內容可能含機密；外傳前必須另外確認。",
+      "scope": "{{path}}，最多 {{size}} KiB"
+    },
+    "terminalSelection": {
+      "title": "終端選取範圍",
+      "why": "只使用使用者明確選取的終端文字，不讀取終端歷史緩衝區。",
+      "sensitive": "選取內容視為不可信參考資料；分享給模型前會另外預覽。",
+      "scope": "使用者選取文字，共 {{count}} 位元組（最多 16 KiB）"
+    }
+  },
+  "statuses": {
+    "queued": "排隊中",
+    "running": "執行中",
+    "completed": "已完成",
+    "cancelled": "已取消",
+    "failed": "失敗",
+    "success": "成功",
+    "unsupported": "不支援",
+    "permissionDenied": "權限不足",
+    "timeout": "逾時",
+    "notRun": "未執行",
+    "error": "錯誤"
+  }
+}

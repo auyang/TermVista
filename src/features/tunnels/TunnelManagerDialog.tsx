@@ -11,27 +11,40 @@ import { useWorkspaceStore, type ConnectionProfile } from "@/stores/workspaceSto
 import { deleteForwardRule, listForwardRules, listForwardRuntimes, listenForwardRuntimes, saveForwardRule, startForward, stopForward } from "./tunnelBridge";
 import { useTunnelStore } from "./tunnelStore";
 import type { ForwardRule, ForwardRuntime, TunnelState } from "./tunnelTypes";
+import { useTranslation } from "react-i18next";
+import i18next from "@/i18n";
 
 type RuleDraft = { id: string | null; name: string; localPort: string; targetHost: string; targetPort: string };
 
 const emptyDraft = (): RuleDraft => ({ id: null, name: "", localPort: "13306", targetHost: "127.0.0.1", targetPort: "3306" });
-const stateLabel: Record<TunnelState, string> = {
-  stopped: "已停止",
-  starting: "启动中",
-  running: "运行中",
-  stopping: "停止中",
-  error: "出错",
-};
+type Translate = (key: string, options?: Record<string, unknown>) => string;
 
-function readableError(error: unknown) {
-  if (typeof error === "string") {
-    try { return (JSON.parse(error) as { message?: string }).message ?? error; } catch { return error; }
+function useTunnelTranslate(): Translate {
+  const { t } = useTranslation("tunnels");
+  return (key, options) => String(t(key as never, options as never));
+}
+
+function tunnelErrorKey(code: string | null | undefined) {
+  const normalized = code?.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
+  const allowed = ["invalid_rule", "bind_in_use", "bind_failed", "session_missing", "session_profile_mismatch", "connection_lost", "remote_rejected", "target_unreachable", "rule_running", "internal"];
+  return allowed.includes(normalized ?? "") ? normalized!.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase()) : "generic";
+}
+
+function tunnelErrorText(t: Translate, code: string | null | undefined) {
+  return t(`errors.${tunnelErrorKey(code)}`);
+}
+
+function tunnelExceptionText(t: Translate, error: unknown) {
+  let code = "";
+  if (error && typeof error === "object" && "code" in error) code = String(error.code);
+  else if (typeof error === "string") {
+    try { code = String((JSON.parse(error) as { code?: string }).code ?? ""); } catch { code = ""; }
   }
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
-    return error.message;
-  }
-  return "端口转发操作失败。";
+  return tunnelErrorText(t, code);
+}
+
+function stateKey(state: TunnelState) {
+  return `state.${state}`;
 }
 
 function createRuleId() {
@@ -39,6 +52,7 @@ function createRuleId() {
 }
 
 export function TunnelManagerDialog() {
+  const t = useTunnelTranslate();
   const open = useWorkspaceStore((state) => state.tunnelManagerOpen);
   const initialProfileId = useWorkspaceStore((state) => state.tunnelManagerProfileId);
   const setTunnelProfileId = useWorkspaceStore((state) => state.setTunnelManagerProfileId);
@@ -49,6 +63,7 @@ export function TunnelManagerDialog() {
   const applyRuntime = useTunnelStore((state) => state.applyRuntime);
   const replaceRuntimes = useTunnelStore((state) => state.replaceRuntimes);
   const clearRuntime = useTunnelStore((state) => state.clearRuntime);
+  const locale = i18next.resolvedLanguage ?? "en-US";
   const [rules, setRules] = useState<ForwardRule[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [draft, setDraft] = useState<RuleDraft | null>(null);
@@ -59,8 +74,8 @@ export function TunnelManagerDialog() {
   const [busyRuleIds, setBusyRuleIds] = useState<Set<string>>(() => new Set());
 
   const sortedProfiles = useMemo(() => [...profiles].sort((a, b) =>
-    a.group.localeCompare(b.group, "zh-CN") || (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, "zh-CN")), [profiles]);
-  const profileGroups = useMemo(() => [...new Set(sortedProfiles.map((profile) => profile.group || "默认分组"))], [sortedProfiles]);
+    a.group.localeCompare(b.group, locale) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name, locale)), [locale, profiles]);
+  const profileGroups = useMemo(() => [...new Set(sortedProfiles.map((profile) => profile.group || "__ungrouped__"))], [sortedProfiles]);
   const activeProfileId = sortedProfiles.some((profile) => profile.id === initialProfileId)
     ? initialProfileId ?? ""
     : sortedProfiles[0]?.id ?? "";
@@ -87,10 +102,10 @@ export function TunnelManagerDialog() {
           replaceRuntimes(nextRuntimes);
           setHasLoaded(true);
         }
-      } catch (error) {
+      } catch {
         if (active) {
           setHasLoaded(true);
-          toast.error(`无法加载端口转发：${readableError(error)}`);
+          toast.error(t("messages.loadedFailed"));
         }
       }
     })();
@@ -98,7 +113,7 @@ export function TunnelManagerDialog() {
       active = false;
       unlisten?.();
     };
-  }, [applyRuntime, open, replaceRuntimes]);
+  }, [applyRuntime, open, replaceRuntimes, t]);
 
   const loading = open && isTauri() && !hasLoaded;
 
@@ -109,7 +124,7 @@ export function TunnelManagerDialog() {
     const targetPort = Number(draft.targetPort);
     if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65_535
       || !Number.isInteger(targetPort) || targetPort < 1 || targetPort > 65_535) {
-      toast.error("端口必须是 1 到 65535 之间的整数。");
+      toast.error(t("messages.invalidPort"));
       return;
     }
     const now = Date.now();
@@ -130,9 +145,9 @@ export function TunnelManagerDialog() {
       const saved = await saveForwardRule(rule);
       setRules((current) => [...current.filter((item) => item.id !== saved.id), saved]);
       setDraft(null);
-      toast.success("端口转发规则已保存。");
+      toast.success(t("messages.saved"));
     } catch (error) {
-      toast.error(`保存失败：${readableError(error)}`);
+      toast.error(tunnelExceptionText(t, error));
     } finally {
       setSaving(false);
     }
@@ -140,15 +155,15 @@ export function TunnelManagerDialog() {
 
   const startRule = async (rule: ForwardRule) => {
     if (!activeSessionId) {
-      toast.error("请先连接此服务器，再启动端口转发。");
+      toast.error(t("errors.sessionMissing"));
       return;
     }
     setBusyRuleIds((current) => new Set(current).add(rule.id));
     try {
       applyRuntime(await startForward(rule.id, activeSessionId));
-      toast.success(`已监听 ${rule.localHost}:${rule.localPort}。`);
+      toast.success(t("messages.listening", { address: `${rule.localHost}:${rule.localPort}` }));
     } catch (error) {
-      toast.error(`启动失败：${readableError(error)}`);
+      toast.error(tunnelExceptionText(t, error));
       try {
         const current = await listForwardRuntimes();
         replaceRuntimes(current);
@@ -166,9 +181,9 @@ export function TunnelManagerDialog() {
     setBusyRuleIds((current) => new Set(current).add(rule.id));
     try {
       applyRuntime(await stopForward(rule.id));
-      toast.success("端口转发已停止，监听端口已释放。");
+      toast.success(t("messages.stopped"));
     } catch (error) {
-      toast.error(`停止失败：${readableError(error)}`);
+      toast.error(tunnelExceptionText(t, error));
     } finally {
       setBusyRuleIds((current) => {
         const next = new Set(current);
@@ -190,9 +205,9 @@ export function TunnelManagerDialog() {
       await deleteForwardRule(deleteTarget.id);
       setRules((current) => current.filter((rule) => rule.id !== deleteTarget.id));
       clearRuntime(deleteTarget.id);
-      toast.success("端口转发规则已删除。");
+      toast.success(t("messages.deleted"));
     } catch (error) {
-      toast.error(`删除失败：${readableError(error)}`);
+      toast.error(tunnelExceptionText(t, error));
     } finally {
       setDeleteTarget(null);
     }
@@ -202,9 +217,9 @@ export function TunnelManagerDialog() {
     if (!runtime?.localAddress) return;
     try {
       await navigator.clipboard.writeText(runtime.localAddress);
-      toast.success("本地监听地址已复制。");
+      toast.success(t("messages.copied"));
     } catch {
-      toast.error("复制失败，请手动选中地址复制。");
+      toast.error(t("messages.copyFailed"));
     }
   };
 
@@ -220,56 +235,56 @@ export function TunnelManagerDialog() {
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
       <DialogContent className="flex h-[min(680px,calc(100vh-48px))] w-[min(980px,calc(100vw-32px))] max-w-[980px] flex-col gap-0 overflow-hidden p-0">
         <header className="flex h-10 shrink-0 items-center justify-between border-b border-border/60 bg-panel-header px-3">
-          <div className="flex min-w-0 items-center gap-2"><GitFork size={14} className="text-accent" /><DialogTitle className="text-sm">端口转发</DialogTitle></div>
-          <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-sm" aria-label="关闭端口转发" onClick={close}><X size={14} /></Button>
+          <div className="flex min-w-0 items-center gap-2"><GitFork size={14} className="text-accent" /><DialogTitle className="text-sm">{t("title")}</DialogTitle></div>
+          <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-sm" aria-label={t("close")} onClick={close}><X size={14} /></Button>
         </header>
         <DialogDescription className="border-b border-border/50 px-3 py-2 text-[10px] leading-4 text-muted-foreground">
-          仅监听本机 127.0.0.1；本机其他程序也能连接此地址。隧道使用对应 SSH 会话，不会在应用重启后自动恢复。请先建立并验证 SSH 连接，再手动启动。
+          {t("description")}
         </DialogDescription>
-        {!isTauri() && <div className="m-3 rounded-sm border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-800 dark:text-amber-200">端口转发需要在 TermVista 桌面应用中运行。</div>}
+        {!isTauri() && <div className="m-3 rounded-sm border border-amber-500/30 bg-amber-500/5 p-2 text-[11px] text-amber-800 dark:text-amber-200">{t("desktopOnly")}</div>}
         <div className="flex min-h-0 flex-1">
-          <aside className="w-56 shrink-0 overflow-y-auto border-r border-border/50 bg-panel/55 p-2" aria-label="服务器分组">
-            <div className="mb-2 flex items-center justify-between px-1 text-[10px] font-semibold text-muted-foreground"><span>服务器</span><span>{profiles.length}</span></div>
+          <aside className="w-56 shrink-0 overflow-y-auto border-r border-border/50 bg-panel/55 p-2" aria-label={t("groups")}>
+            <div className="mb-2 flex items-center justify-between px-1 text-[10px] font-semibold text-muted-foreground"><span>{t("servers")}</span><span>{profiles.length}</span></div>
             {profileGroups.map((group) => <section key={group} className="mb-2">
-              <div className="truncate px-1 py-1 text-[9px] uppercase tracking-wide text-muted-foreground" title={group}>{group}</div>
-              {sortedProfiles.filter((profile) => (profile.group || "默认分组") === group).map((profile) => <ProfileChoice key={profile.id} profile={profile} active={profile.id === activeProfileId} onClick={() => { setTunnelProfileId(profile.id); setDraft(null); }} />)}
+              <div className="truncate px-1 py-1 text-[9px] uppercase tracking-wide text-muted-foreground" title={group}>{group === "__ungrouped__" ? t("defaultGroup") : group}</div>
+              {sortedProfiles.filter((profile) => (profile.group || "__ungrouped__") === group).map((profile) => <ProfileChoice key={profile.id} profile={profile} active={profile.id === activeProfileId} onClick={() => { setTunnelProfileId(profile.id); setDraft(null); }} />)}
             </section>)}
-            {profiles.length === 0 && <div className="px-2 py-3 text-[10px] text-muted-foreground">先在连接管理器中添加服务器。</div>}
+            {profiles.length === 0 && <div className="px-2 py-3 text-[10px] text-muted-foreground">{t("addServer")}</div>}
           </aside>
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <div className="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/50 px-3 py-2">
               <div className="min-w-0">
-                <div className="truncate text-xs font-medium">{activeProfile?.name ?? "选择服务器"}</div>
+                <div className="truncate text-xs font-medium">{activeProfile?.name ?? t("selectServer")}</div>
                 {activeProfile && <div className="truncate font-mono text-[9px] text-muted-foreground">{activeProfile.username}@{activeProfile.host}:{activeProfile.port}</div>}
               </div>
               <div className="flex items-center gap-2">
-                {connectedSessions.length > 1 ? <select className="h-7 max-w-52 rounded-sm border border-border bg-background px-2 text-[10px]" aria-label="选择已认证 SSH 会话" value={activeSessionId} onChange={(event) => setSelectedSessionId(event.target.value)}>
-                  <option value="">选择已连接会话</option>
+                {connectedSessions.length > 1 ? <select className="h-7 max-w-52 rounded-sm border border-border bg-background px-2 text-[10px]" aria-label={t("selectSessionAria")} value={activeSessionId} onChange={(event) => setSelectedSessionId(event.target.value)}>
+                  <option value="">{t("selectConnectedSession")}</option>
                   {connectedSessions.map((session) => <option key={session.sessionId} value={session.sessionId}>{session.username} · {session.attemptId.slice(0, 8)}</option>)}
-                </select> : <span className={`text-[10px] ${connectedSessions.length ? "text-success" : "text-muted-foreground"}`}>{connectedSessions.length ? "SSH 已认证" : "SSH 未连接"}</span>}
-                <Button type="button" size="sm" className="h-7 rounded-sm px-2 text-[10px]" disabled={!activeProfileId || !isTauri()} onClick={() => setDraft(emptyDraft())}><Plus size={12} />新增转发</Button>
+                </select> : <span className={`text-[10px] ${connectedSessions.length ? "text-success" : "text-muted-foreground"}`}>{connectedSessions.length ? t("sshAuthenticated") : t("sshDisconnected")}</span>}
+                <Button type="button" size="sm" className="h-7 rounded-sm px-2 text-[10px]" disabled={!activeProfileId || !isTauri()} onClick={() => setDraft(emptyDraft())}><Plus size={12} />{t("addRule")}</Button>
               </div>
             </div>
             {draft && <form className="shrink-0 border-b border-border/50 bg-panel-header/35 p-3" onSubmit={(event) => void saveRule(event)}>
-              <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-medium">{draft.id ? "编辑转发规则" : "新建转发规则"}</span><Button type="button" variant="ghost" size="icon" className="h-5 w-5" aria-label="关闭规则表单" onClick={() => setDraft(null)}><X size={12} /></Button></div>
+              <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-medium">{draft.id ? t("editRule") : t("newRule")}</span><Button type="button" variant="ghost" size="icon" className="h-5 w-5" aria-label={t("closeRuleForm")} onClick={() => setDraft(null)}><X size={12} /></Button></div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                <Field label="规则名称"><Input className="h-7 rounded-sm text-[11px]" maxLength={64} required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="例如：开发数据库" /></Field>
-                <Field label="远端服务预设"><select className="h-7 w-full rounded-sm border border-border bg-background px-2 text-[11px]" defaultValue="custom" onChange={(event) => {
+                <Field label={t("ruleName")}><Input className="h-7 rounded-sm text-[11px]" maxLength={64} required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder={t("namePlaceholder")} /></Field>
+                <Field label={t("remotePreset")}><select className="h-7 w-full rounded-sm border border-border bg-background px-2 text-[11px]" defaultValue="custom" onChange={(event) => {
                   const presets: Record<string, { name: string; port: string }> = { mysql: { name: "MySQL", port: "3306" }, postgres: { name: "PostgreSQL", port: "5432" }, redis: { name: "Redis", port: "6379" } };
                   const preset = presets[event.target.value];
                   if (preset) setDraft((current) => current ? { ...current, name: current.name || preset.name, targetPort: preset.port } : current);
-                }}><option value="custom">自定义</option><option value="mysql">MySQL · 3306</option><option value="postgres">PostgreSQL · 5432</option><option value="redis">Redis · 6379</option></select></Field>
-                <Field label="本机监听"><div className="flex h-7 items-center gap-2 rounded-sm border border-border bg-background px-2 font-mono text-[10px]"><span className="text-muted-foreground">127.0.0.1 :</span><input className="min-w-0 flex-1 bg-transparent outline-none" type="number" min={1} max={65535} required value={draft.localPort} onChange={(event) => setDraft({ ...draft, localPort: event.target.value })} aria-label="本地监听端口" /></div></Field>
-                <Field label="远端主机"><Input className="h-7 rounded-sm font-mono text-[10px]" maxLength={255} required value={draft.targetHost} onChange={(event) => setDraft({ ...draft, targetHost: event.target.value })} placeholder="127.0.0.1 或 db.example.com" /></Field>
-                <Field label="远端端口"><Input className="h-7 rounded-sm font-mono text-[10px]" type="number" min={1} max={65535} required value={draft.targetPort} onChange={(event) => setDraft({ ...draft, targetPort: event.target.value })} /></Field>
-                <div className="col-span-2 flex justify-end gap-1"><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2 text-[10px]" onClick={() => setDraft(null)}>取消</Button><Button type="submit" size="sm" className="h-7 rounded-sm px-2 text-[10px]" disabled={saving}>{saving && <LoaderCircle size={12} className="animate-spin" />}{saving ? "保存中…" : "保存规则"}</Button></div>
+                }}><option value="custom">{t("custom")}</option><option value="mysql">MySQL · 3306</option><option value="postgres">PostgreSQL · 5432</option><option value="redis">Redis · 6379</option></select></Field>
+                <Field label={t("localListen")}><div className="flex h-7 items-center gap-2 rounded-sm border border-border bg-background px-2 font-mono text-[10px]"><span className="text-muted-foreground">127.0.0.1 :</span><input className="min-w-0 flex-1 bg-transparent outline-none" type="number" min={1} max={65535} required value={draft.localPort} onChange={(event) => setDraft({ ...draft, localPort: event.target.value })} aria-label={t("localPort")} /></div></Field>
+                <Field label={t("remoteHost")}><Input className="h-7 rounded-sm font-mono text-[10px]" maxLength={255} required value={draft.targetHost} onChange={(event) => setDraft({ ...draft, targetHost: event.target.value })} placeholder={t("remoteHostPlaceholder")} /></Field>
+                <Field label={t("remotePort")}><Input className="h-7 rounded-sm font-mono text-[10px]" type="number" min={1} max={65535} required value={draft.targetPort} onChange={(event) => setDraft({ ...draft, targetPort: event.target.value })} /></Field>
+                <div className="col-span-2 flex justify-end gap-1"><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2 text-[10px]" onClick={() => setDraft(null)}>{t("cancel")}</Button><Button type="submit" size="sm" className="h-7 rounded-sm px-2 text-[10px]" disabled={saving}>{saving && <LoaderCircle size={12} className="animate-spin" />}{saving ? t("saving") : t("saveRule")}</Button></div>
               </div>
             </form>}
             <div className="grid shrink-0 grid-cols-[minmax(100px,1fr)_150px_150px_78px_60px_136px] gap-2 border-b border-border/50 bg-panel-header/45 px-3 py-2 text-[9px] font-medium text-muted-foreground">
-              <span>名称</span><span>本地监听</span><span>远端目标</span><span>状态</span><span>连接</span><span className="text-right">操作</span>
+              <span>{t("name")}</span><span>{t("localListen")}</span><span>{t("remoteTarget")}</span><span>{t("status")}</span><span>{t("connections")}</span><span className="text-right">{t("actions")}</span>
             </div>
             <div className="compact-scrollbar min-h-0 flex-1 overflow-auto">
-              {loading && <div className="flex items-center justify-center gap-2 py-8 text-[10px] text-muted-foreground"><LoaderCircle size={13} className="animate-spin" />读取转发规则…</div>}
+              {loading && <div className="flex items-center justify-center gap-2 py-8 text-[10px] text-muted-foreground"><LoaderCircle size={13} className="animate-spin" />{t("loading")}</div>}
               {!loading && profileRules.map((rule) => <ForwardRuleRow
                 key={rule.id}
                 rule={rule}
@@ -282,11 +297,11 @@ export function TunnelManagerDialog() {
                 onEdit={() => beginEdit(rule)}
                 onDelete={() => setDeleteTarget(rule)}
               />)}
-              {!loading && activeProfileId && profileRules.length === 0 && <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-center text-[11px] text-muted-foreground"><GitFork size={20} className="opacity-40" />此服务器还没有端口转发规则<Button type="button" variant="outline" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => setDraft(emptyDraft())}><Plus size={12} />新增规则</Button></div>}
-              {!loading && !activeProfileId && profiles.length > 0 && <div className="px-3 py-6 text-center text-[10px] text-muted-foreground">选择左侧服务器以查看端口转发。</div>}
+              {!loading && activeProfileId && profileRules.length === 0 && <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-center text-[11px] text-muted-foreground"><GitFork size={20} className="opacity-40" />{t("empty")}<Button type="button" variant="outline" size="sm" className="h-7 rounded-sm text-[10px]" onClick={() => setDraft(emptyDraft())}><Plus size={12} />{t("addRuleButton")}</Button></div>}
+              {!loading && !activeProfileId && profiles.length > 0 && <div className="px-3 py-6 text-center text-[10px] text-muted-foreground">{t("selectServerHint")}</div>}
             </div>
             {activeProfile && <footer className="shrink-0 border-t border-border/50 px-3 py-2 text-[9px] leading-4 text-muted-foreground">
-              目标由 SSH 服务端解析并连接。远端数据库若只允许服务器本机访问，目标主机可填 127.0.0.1。断线后监听会释放，重连后需手动启动。
+              {t("footer")}
             </footer>}
           </main>
         </div>
@@ -294,18 +309,18 @@ export function TunnelManagerDialog() {
     </Dialog>
     <AlertDialog open={Boolean(startTarget)} onOpenChange={(next) => { if (!next) setStartTarget(null); }}>
       <AlertDialogContent>
-        <AlertDialogTitle>启动本地端口转发？</AlertDialogTitle>
+        <AlertDialogTitle>{t("startTitle")}</AlertDialogTitle>
         <AlertDialogDescription>
-          本机其他程序可以连接 127.0.0.1:{startTarget?.localPort}，并通过此 SSH 会话访问 {startTarget?.targetHost}:{startTarget?.targetPort}。监听仅限本机，不会开放到局域网或公网；请只对可信服务启用。
+          {t("startDescription", { localPort: startTarget?.localPort ?? "", targetHost: startTarget?.targetHost ?? "", targetPort: startTarget?.targetPort ?? "" })}
         </AlertDialogDescription>
-        <div className="flex justify-end gap-2"><AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">取消</Button></AlertDialogCancel><Button type="button" size="sm" className="h-7 rounded-sm px-2" onClick={confirmStart}>启动转发</Button></div>
+        <div className="flex justify-end gap-2"><AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">{t("cancel")}</Button></AlertDialogCancel><Button type="button" size="sm" className="h-7 rounded-sm px-2" onClick={confirmStart}>{t("startButton")}</Button></div>
       </AlertDialogContent>
     </AlertDialog>
     <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(next) => { if (!next) setDeleteTarget(null); }}>
       <AlertDialogContent>
-        <AlertDialogTitle>删除端口转发规则？</AlertDialogTitle>
-        <AlertDialogDescription>删除“{deleteTarget?.name}”。运行中的规则必须先停止，删除后不会再自动恢复。</AlertDialogDescription>
-        <div className="flex justify-end gap-2"><AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">取消</Button></AlertDialogCancel><Button type="button" variant="destructive" size="sm" className="h-7 rounded-sm px-2" onClick={() => void removeRule()}>删除规则</Button></div>
+        <AlertDialogTitle>{t("deleteTitle")}</AlertDialogTitle>
+        <AlertDialogDescription>{t("deleteDescription", { name: deleteTarget?.name ?? "" })}</AlertDialogDescription>
+        <div className="flex justify-end gap-2"><AlertDialogCancel asChild><Button type="button" variant="ghost" size="sm" className="h-7 rounded-sm px-2">{t("cancel")}</Button></AlertDialogCancel><Button type="button" variant="destructive" size="sm" className="h-7 rounded-sm px-2" onClick={() => void removeRule()}>{t("deleteButton")}</Button></div>
       </AlertDialogContent>
     </AlertDialog>
   </>;
@@ -333,22 +348,23 @@ function ForwardRuleRow({ rule, runtime, canStart, disabled, onStart, onStop, on
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useTunnelTranslate();
   const state = runtime?.state ?? "stopped";
   const running = state === "running" || state === "starting" || state === "stopping";
   return <div className="grid min-h-12 grid-cols-[minmax(100px,1fr)_150px_150px_78px_60px_136px] items-center gap-2 border-b border-border/35 px-3 py-1.5 text-[10px] even:bg-panel-header/20">
     <span className="min-w-0 truncate font-medium" title={rule.name}>{rule.name}</span>
     <span className="truncate font-mono text-muted-foreground" title={`${rule.localHost}:${rule.localPort}`}>{rule.localHost}:{rule.localPort}</span>
     <span className="truncate font-mono text-muted-foreground" title={`${rule.targetHost}:${rule.targetPort}`}>{rule.targetHost}:{rule.targetPort}</span>
-    <span className={`truncate ${state === "running" ? "text-success" : state === "error" ? "text-destructive" : "text-muted-foreground"}`} title={runtime?.lastErrorMessage ?? stateLabel[state]}>
-      {stateLabel[state]}
-      {runtime?.localAddress && <button type="button" className="ml-1 inline-flex align-middle text-muted-foreground hover:text-foreground" title="复制本地监听地址" aria-label={`复制 ${runtime.localAddress}`} onClick={onCopy}><Copy size={10} /></button>}
-      {state === "error" && runtime?.lastErrorMessage && <span className="sr-only">：{runtime.lastErrorMessage}</span>}
+    <span className={`truncate ${state === "running" ? "text-success" : state === "error" ? "text-destructive" : "text-muted-foreground"}`} title={state === "error" ? tunnelErrorText(t, runtime?.lastErrorCode) : t(stateKey(state))}>
+      {t(stateKey(state))}
+      {runtime?.localAddress && <button type="button" className="ml-1 inline-flex align-middle text-muted-foreground hover:text-foreground" title={t("copyAddress")} aria-label={t("copyAria", { address: runtime.localAddress })} onClick={onCopy}><Copy size={10} /></button>}
+      {state === "error" && runtime?.lastErrorCode && <span className="sr-only">{tunnelErrorText(t, runtime.lastErrorCode)}</span>}
     </span>
     <span className="tabular-nums text-muted-foreground">{runtime?.activeConnections ?? 0}</span>
     <span className="flex justify-end gap-0.5">
-      {state === "running" || state === "starting" ? <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-sm" disabled={disabled || state === "starting"} aria-label={`停止 ${rule.name}`} title="停止并释放端口" onClick={onStop}><Square size={11} /></Button> : <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-sm" disabled={disabled || !canStart || state === "stopping"} aria-label={`启动 ${rule.name}`} title={canStart ? "启动端口转发" : "请先连接此服务器"} onClick={onStart}><Power size={11} /></Button>}
-      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-sm" disabled={disabled || running} aria-label={`编辑 ${rule.name}`} title={running ? "请先停止规则再编辑" : "编辑"} onClick={onEdit}><Pencil size={11} /></Button>
-      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-sm text-muted-foreground hover:text-destructive" disabled={disabled || running} aria-label={`删除 ${rule.name}`} title={running ? "请先停止规则再删除" : "删除"} onClick={onDelete}><Trash2 size={11} /></Button>
+      {state === "running" || state === "starting" ? <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-sm" disabled={disabled || state === "starting"} aria-label={t("stopRuleAria", { name: rule.name })} title={t("stopAndRelease")} onClick={onStop}><Square size={11} /></Button> : <Button type="button" variant="outline" size="icon" className="h-6 w-6 rounded-sm" disabled={disabled || !canStart || state === "stopping"} aria-label={t("startRuleAria", { name: rule.name })} title={canStart ? t("startForward") : t("connectFirst")} onClick={onStart}><Power size={11} /></Button>}
+      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-sm" disabled={disabled || running} aria-label={t("editRuleAria", { name: rule.name })} title={running ? t("stopBeforeEdit") : t("edit")} onClick={onEdit}><Pencil size={11} /></Button>
+      <Button type="button" variant="ghost" size="icon" className="h-6 w-6 rounded-sm text-muted-foreground hover:text-destructive" disabled={disabled || running} aria-label={t("deleteRuleAria", { name: rule.name })} title={running ? t("stopBeforeEdit") : t("delete")} onClick={onDelete}><Trash2 size={11} /></Button>
     </span>
   </div>;
 }

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type SettingsSection = "general" | "terminal" | "connections" | "sftp" | "monitoring" | "aiPrivacy" | "appearance";
 export type WritableSettingsSection = "general" | "terminal" | "connections" | "monitoring" | "appearance";
+export type LanguagePreference = "system" | "en-US" | "zh-CN" | "ja-JP" | "zh-TW";
 
 export type PublicSettings = {
   schemaVersion: number;
@@ -32,6 +33,7 @@ export type PublicSettings = {
     themeMode: "system" | "light" | "dark";
     showMonitorSidebar: boolean;
     aiPanelOpenByDefault: boolean;
+    languagePreference: LanguagePreference;
   };
 };
 
@@ -80,6 +82,7 @@ export const defaultSettings: PublicSettings = {
     themeMode: "system",
     showMonitorSidebar: true,
     aiPanelOpenByDefault: false,
+    languagePreference: "system",
   },
 };
 

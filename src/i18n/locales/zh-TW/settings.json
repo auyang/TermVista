@@ -1,0 +1,380 @@
+{
+  "title": "設置",
+  "about": "關于 TermVista",
+  "interfaceLanguage": "界面語言",
+  "systemLanguage": "跟隨系統語言",
+  "systemLanguageResolved": "當前系統語言：{{language}}",
+  "saveFailed": "無法保存語言偏好，已恢復為 {{language}}。",
+  "restartNotRequired": "更改立即生效。",
+  "nav": {
+    "general": "通用",
+    "terminal": "終端",
+    "connections": "連接與安全",
+    "sftp": "文件傳输",
+    "monitoring": "服務器監控",
+    "aiPrivacy": "AI 與隱私",
+    "appearance": "外观與快捷鍵",
+    "about": "關于 TermVista"
+  },
+  "dialog": {
+    "description": "管理應用偏好與安全選項。SSH 凭據由本机加密保险庫保護。",
+    "categories": "設置分類",
+    "resetConfirm": "確定恢復“{{section}}”的默認設置吗？此操作僅修改設置項。",
+    "reset": "恢復默認（{{section}}）",
+    "close": "關闭",
+    "saveError": "設置保存失败，界面仍顯示原值：{{error}}"
+  },
+  "row": {
+    "state": "當前：{{value}} · 生效：{{timing}}",
+    "stateWithDefault": "當前：{{value}} · 默認：{{defaultValue}} · 生效：{{timing}}"
+  },
+  "values": {
+    "on": "開啟",
+    "off": "關闭",
+    "paused": "暂停",
+    "immediately": "立即",
+    "nextLaunch": "下次啟动",
+    "newTerminal": "新終端",
+    "currentVersion": "當前版本",
+    "eachConnection": "每條連接",
+    "eachTask": "每個任務",
+    "eachDownload": "每次下载",
+    "eachRequest": "每次請求",
+    "eachProvider": "每個 Provider",
+    "currentSession": "當前會話",
+    "followSystem": "跟隨系統",
+    "light": "淺色",
+    "dark": "深色",
+    "show": "顯示",
+    "hide": "隱藏",
+    "expanded": "展開",
+    "compact": "緊湊",
+    "quickConnect": "快速連接",
+    "notAvailable": "不可用",
+    "enabled": "已啟用",
+    "enforced": "强制啟用",
+    "ask": "询問",
+    "onePerSession": "每個會話 1 個",
+    "orderedQueue": "顺序队列",
+    "confirmEach": "逐項確認",
+    "systemPicker": "系統文件選擇器",
+    "readOnlyAllowlist": "只讀白名單",
+    "sessionIsolated": "按會話隔離",
+    "byProvider": "按 Provider 管理",
+    "enginePolicy": "引擎策略",
+    "engineDefault": "引擎默認值",
+    "currentConnections": "連接後讀取",
+    "permissionEachTime": "逐次授權",
+    "notConfigured": "未配置",
+    "openAiPanel": "打開 AI 面板時",
+    "lines": "行"
+  },
+  "loading": {
+    "reading": "正在讀取設置…",
+    "notLoaded": "設置尚未加载。"
+  },
+  "toggle": {
+    "on": "開",
+    "off": "關"
+  },
+  "general": {
+    "title": "通用",
+    "description": "管理啟动時的工作區恢復和本机連接歷史。SSH 會話、PTY 與遠端進程不會隨窗口重啟恢復。",
+    "restoreWorkspace": {
+      "title": "恢復上次標籤與工作區",
+      "description": "僅恢復本机標籤、面板布局和 SFTP 上次路徑；不會恢復遠端進程。"
+    },
+    "autoConnect": {
+      "title": "自动連接恢復的服務器標籤",
+      "description": "僅處理上次工作區中的 SSH 標籤。首次主机密钥校驗、凭據缺失和登錄確認仍遵循原有安全流程。"
+    },
+    "recentConnections": {
+      "title": "维護最近連接",
+      "description": "關闭後不再记錄新的最近連接時間；現有配置、收藏、凭據和可信指纹會保留。"
+    },
+    "checkUpdates": {
+      "title": "啟动後检查更新",
+      "description": "應用啟动後在後台检查。發現更新時顯示非阻断通知，不會自动下载或安装。"
+    },
+    "newTab": {
+      "title": "新標籤頁",
+      "description": "新標籤頁打開快速連接首頁。"
+    }
+  },
+  "terminal": {
+    "title": "終端",
+    "description": "字号和光標更改會立即應用到已打開的 SSH 終端。滚动缓衝區始終有上限。",
+    "fontSize": {
+      "title": "終端字号",
+      "description": "范围 11–24 px；立即在當前會話预覽。"
+    },
+    "font": {
+      "title": "字體",
+      "description": "使用系統等宽字體回退列表。"
+    },
+    "lineHeight": {
+      "title": "行距",
+      "description": "xterm.js 行高倍率，范围 1.0–2.0。"
+    },
+    "cursorStyle": {
+      "title": "光標樣式",
+      "description": "終端光標形状。",
+      "block": "块状",
+      "underline": "下劃線",
+      "bar": "竖線"
+    },
+    "cursorBlink": {
+      "title": "光標闪烁",
+      "description": "控制當前終端中的光標闪烁。"
+    },
+    "colorScheme": {
+      "title": "終端配色",
+      "description": "終端保持深色；“跟隨主题”使用應用主题對應的默認終端颜色。",
+      "follow": "跟隨主题",
+      "dark": "深色終端"
+    },
+    "scrollback": {
+      "title": "滚动缓衝區",
+      "description": "限制每個終端保留的歷史行數，不會持久保存會話输出。"
+    },
+    "pastePreview": {
+      "title": "多行粘贴预覽",
+      "description": "预覽多行内容和控制字符。超大内容及未連接時的粘贴仍會被安全检查阻止。"
+    },
+    "clearHistory": {
+      "title": "分別清屏和清除滚动歷史",
+      "description": "終端控制序列可分別清屏和清除滚动缓衝區。本頁不提供可能誤刪會話状態的合並操作。"
+    }
+  },
+  "connections": {
+    "title": "連接與安全",
+    "description": "主机身份校驗始終開啟。自动重連需同時啟用全局和單條連接選項，並且本机凭據可用。",
+    "autoReconnect": {
+      "title": "允许自动重連",
+      "description": "採用指數退避，最多重试 5 次；還需為每台服務器單獨啟用。主机密钥變化會立即停止重试。"
+    },
+    "hostKey": {
+      "title": "SSH 主机密钥驗證",
+      "description": "首次連接時，可選擇僅本次信任或永久保存。已信任的主机密钥變化時會阻止連接。"
+    },
+    "trustedHosts": {
+      "title": "可信主机與指纹",
+      "description": "查看每台主机的密钥算法、SHA256 指纹和信任時間。撤销後，下次連接需重新驗證。",
+      "button": "查看可信主机"
+    },
+    "timeout": {
+      "title": "SSH 超時",
+      "description": "使用當前 SSH 引擎的超時策略；此版本不提供單獨的超時設置。"
+    },
+    "credentials": {
+      "title": "已保存的登錄凭據",
+      "description": "密码和私钥口令由本机加密保险庫保護。設置及状態接口不會讀取或返回秘密。",
+      "button": "打開連接管理器"
+    }
+  },
+  "sftp": {
+    "title": "文件傳输",
+    "description": "顯示當前已實現的傳输安全策略，不展示尚未接入後端的設置項。",
+    "concurrency": {
+      "title": "並發傳输數",
+      "description": "每個 SSH 會話按队列顺序傳输，避免同時寫入遠端目標。"
+    },
+    "conflicts": {
+      "title": "同名文件衝突",
+      "description": "目標文件已存在時，可為當前队列選擇跳過、保留兩者或覆盖。"
+    },
+    "delete": {
+      "title": "確認遠程刪除",
+      "description": "刪除前顯示目標信息並要求確認。"
+    },
+    "downloadLocation": {
+      "title": "本机下载位置",
+      "description": "每次下载都通過系統文件選擇器指定目標目錄，不保存固定位置。"
+    },
+    "editorConflict": {
+      "title": "遠程編輯衝突检查",
+      "description": "當前没有獨立的遠程文本編輯器，因此不顯示未接入的修改時間检查選項。"
+    }
+  },
+  "monitoring": {
+    "title": "服務器監控",
+    "description": "監控數據僅来自活动 SSH 會話。暂停會停止後台採樣，不顯示演示指標。",
+    "enabled": {
+      "title": "監控當前連接",
+      "description": "關闭後停止所有當前會話的採樣；重新開啟後僅監控仍保持連接的會話。"
+    },
+    "hostSampling": {
+      "title": "主机、CPU、内存與網絡採樣",
+      "description": "活动會話每 2 秒採樣；後台會話每 15 秒採樣。"
+    },
+    "processSampling": {
+      "title": "進程採樣",
+      "description": "活动會話每 2 秒採樣；後台會話每 15 秒採樣。進程 CPU 根據連續樣本計算。"
+    },
+    "diskSampling": {
+      "title": "磁盤採樣",
+      "description": "磁盤數據每 20 秒採樣一次。"
+    },
+    "disconnect": {
+      "title": "断開的會話",
+      "description": "SSH 断開時停止監控订阅，並將舊數據標记為過期。"
+    }
+  },
+  "aiPrivacy": {
+    "title": "AI 與隱私",
+    "description": "只讀辅助不會自动執行命令。只有逐項選擇並预覽後，終端或文件上下文才會發送。",
+    "provider": {
+      "title": "模型 Provider",
+      "description": "僅顯示已配置的 Provider；未配置時不會返回模拟回答。",
+      "button": "打開 AI 面板"
+    },
+    "context": {
+      "title": "上下文共享",
+      "description": "不會自动附加終端或文件上下文。每次請求都需單獨预覽並授權。"
+    },
+    "diagnostics": {
+      "title": "诊断權限",
+      "description": "诊断工具使用固定的只讀命令白名單。每一步都由用戶审阅並批準；日志内容不會提升權限。"
+    },
+    "apiKey": {
+      "title": "API Key",
+      "description": "密钥保存在系統凭據庫。界面只讀取是否已配置，不會回填密钥。請在 AI 面板中管理 Provider。"
+    },
+    "history": {
+      "title": "對話歷史",
+      "description": "對話上下文按 SSH 會話隔離；會話關闭時清除相應運行態。"
+    }
+  },
+  "appearance": {
+    "title": "外观與快捷鍵",
+    "description": "更改應用主题和工作區啟动偏好，不改變現有分區布局。",
+    "theme": {
+      "title": "應用主题",
+      "description": "“跟隨系統”會同步操作系統的淺色和深色外观。"
+    },
+    "monitorSidebar": {
+      "title": "服務器監控侧欄",
+      "description": "顯示或隱藏左侧監控區，不影响連接状態或監控數據。"
+    },
+    "aiPanel": {
+      "title": "默認展開 AI 面板",
+      "description": "默認關闭；僅决定下次啟动時的初始状態，不影响當前會話。"
+    },
+    "density": {
+      "title": "面板密度",
+      "description": "工作區保持緊湊桌面布局。"
+    },
+    "shortcuts": {
+      "title": "鍵盤快捷鍵",
+      "settings": "設置",
+      "search": "全局搜索",
+      "newTab": "新建標籤",
+      "toggleAi": "切換 AI 面板",
+      "description": "此處可查看快捷鍵；當前版本不支持編輯快捷鍵。"
+    }
+  },
+  "aboutPanel": {
+    "title": "關于 {{name}}",
+    "description": "产品信息和當前運行版本。",
+    "iconAlt": "TermVista 應用圖標",
+    "version": "版本",
+    "platform": "運行平台",
+    "channel": "發布通道",
+    "buildHash": "构建標識",
+    "updater": "更新服務",
+    "updaterConfigured": "已配置",
+    "updaterChecking": "正在检查配置…",
+    "updaterUnavailable": "不可用",
+    "metadataUnavailable": "無法讀取",
+    "metadataError": "應用信息讀取失败：{{error}}",
+    "copyDiagnostics": "復制脱敏诊断信息",
+    "diagnosticsCopied": "已復制脱敏诊断信息，其中不包含主机、账号、路徑、密钥或終端内容。",
+    "diagnosticsCopyFailed": "無法復制诊断信息，請检查系統剪贴板權限。",
+    "englishDescription": "桌面 SSH 工作台",
+    "descriptionText": "集 SSH 終端、SFTP 文件管理、服務器監控和 AI Copilot 于一體的跨平台遠程工作台。",
+    "tagline": "遠程工作，尽在一處。"
+  },
+  "vault": {
+    "title": "登入認證資料保險庫",
+    "unlockedKeychain": "保險庫已解鎖，主金鑰由本機安全認證儲存庫保護。密碼與私鑰密語以 AES-256-GCM 加密儲存。",
+    "unlockedPassword": "保險庫已解鎖，此次由主密碼解鎖。密碼與私鑰密語以 AES-256-GCM 加密儲存。",
+    "lockedPassword": "保險庫已鎖定。輸入主密碼後才能使用已儲存的登入認證資料。",
+    "lockedKeychain": "保險庫已鎖定。可重新從本機安全認證儲存庫讀取主金鑰。",
+    "uninitialized": "完成設定後，選擇記住的密碼和私鑰密語會加密儲存在本機。",
+    "loading": "正在讀取本機保險庫狀態…",
+    "useKeychain": "使用本機安全認證儲存庫",
+    "useMasterPassword": "使用主密碼",
+    "newPassword": "新的保險庫主密碼",
+    "passwordMin": "主密碼至少 12 個字元",
+    "confirmPassword": "確認保險庫主密碼",
+    "repeatPassword": "再次輸入主密碼",
+    "create": "建立保險庫",
+    "cancel": "取消",
+    "currentPassword": "保險庫主密碼",
+    "enterPassword": "輸入主密碼",
+    "unlock": "解鎖",
+    "unlockVault": "解鎖保險庫",
+    "lockNow": "立即鎖定",
+    "rotateKey": "輪替主金鑰並重新加密",
+    "changePassword": "變更主密碼並輪替",
+    "newPasswordMin": "新主密碼至少 12 個字元",
+    "confirmNewPassword": "確認新的保險庫主密碼",
+    "repeatNewPassword": "再次輸入新主密碼",
+    "rotate": "輪替並重新加密",
+    "mismatch": "兩次輸入的主密碼不一致。",
+    "newMismatch": "兩次輸入的新主密碼不一致。",
+    "confirmRotate": "輪替會重新加密保險庫中的所有本機認證資料。確定繼續？",
+    "confirmKeychainRotate": "輪替會重新產生主金鑰並重新加密保險庫中的所有本機認證資料。確定繼續？",
+    "error": "保險庫操作失敗。",
+    "retry": "重試"
+  },
+  "keyManager": {
+    "title": "SSH 金鑰",
+    "locked": "解鎖保險庫後即可管理",
+    "count": "{{count}} 個",
+    "newName": "新金鑰名稱",
+    "keyName": "金鑰名稱",
+    "keyType": "新金鑰類型",
+    "rsaLength": "RSA 金鑰長度",
+    "rsa3072": "RSA 3072 位元",
+    "rsa4096": "RSA 4096 位元",
+    "generatePassphrase": "私鑰密語至少 8 個字元",
+    "generate": "產生",
+    "passphraseStorage": "私鑰會以密語加密後存入本機保險庫；請妥善保管密語。",
+    "importPrompt": "選取要匯入的 OpenSSH 私鑰",
+    "chooseFile": "選擇檔案",
+    "importName": "匯入金鑰名稱",
+    "importPassphrase": "加密私鑰密語（如有）",
+    "encryptImport": "加密匯入",
+    "loading": "正在讀取金鑰清單…",
+    "empty": "沒有已儲存的 SSH 金鑰。",
+    "createdAt": "建立於 {{date}}",
+    "usedBy": "已用於 {{count}} 個連線",
+    "unlinked": "未關聯連線",
+    "showPublic": "顯示公開金鑰",
+    "copyPublicAria": "複製 {{alias}} 的公開金鑰",
+    "copyPublicTitle": "複製公開金鑰",
+    "exportPrivateAria": "匯出 {{alias}} 的私鑰",
+    "exportTitle": "匯出加密私鑰",
+    "deleteAria": "刪除金鑰 {{alias}}",
+    "deleteTitle": "刪除金鑰",
+    "referenced": "仍有 {{count}} 個連線使用",
+    "exportSafety": "匯出檔案會以新密語加密，並設定為只有目前使用者可讀。若來源私鑰已加密，還需輸入目前密語；目的檔案必須尚不存在。",
+    "currentPassphrase": "目前私鑰密語",
+    "sourcePassphraseHint": "目前密語（來源金鑰已加密時填寫）",
+    "newExportPassphrase": "新匯出密語至少 8 個字元",
+    "confirmExportPassphrase": "確認匯出私鑰密語",
+    "repeatExportPassphrase": "再次輸入新密語",
+    "cancel": "取消",
+    "chooseExport": "選擇匯出位置",
+    "passphraseMismatch": "兩次輸入的匯出私鑰密語不一致。",
+    "deleteConfirm": "刪除「{{alias}}」及其保險庫中的私鑰？此操作無法復原。",
+    "deleted": "已刪除金鑰「{{alias}}」。",
+    "generated": "SSH 金鑰已產生並加密儲存在本機保險庫。",
+    "imported": "SSH 私鑰已驗證並加密儲存在本機保險庫。",
+    "exported": "已匯出使用新密語加密的 SSH 金鑰。",
+    "copyFailed": "無法複製 SSH 公開金鑰，請檢查系統剪貼簿權限。",
+    "error": "SSH 金鑰操作失敗。",
+    "retry": "重試"
+  }
+}

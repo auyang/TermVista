@@ -1,0 +1,18 @@
+{
+  "title": "Quick Connect",
+  "subtitle": "Double-click to connect, open the terminal, or browse files",
+  "manageConnections": "Manage connections",
+  "loading": { "aria": "Loading server profiles", "screenReader": "Loading local server profiles" },
+  "loadError": { "title": "Could not read local connection profiles", "description": "The profile database is temporarily unavailable. Saved connections remain intact; retry to read them again.", "retry": "Retry" },
+  "empty": { "title": "No server connections yet", "description": "Add an SSH profile to see it here. Login passwords and private-key passphrases can be protected in the local encrypted vault.", "addSsh": "Add SSH connection" },
+  "filter": { "aria": "Filter connections", "all": "All", "favorites": "Favorites", "recent": "Recent" },
+  "batch": { "connectCount": "Connect selected ({{count}})", "paused": "Batch connection paused. Finish login verification for {{name}}, then start the remaining connections again.", "completed": "Processed {{count}} servers.", "title": "Connect to multiple servers?", "description": "The following {{count}} servers will be processed in order. Each server still uses its own host-key and credential checks. The batch pauses when a login needs your attention.", "start": "Start connecting", "maxSelected": "Select up to 3 servers" },
+  "search": { "placeholder": "Search name, host, or user", "aria": "Search connections" },
+  "emptyFiltered": "No servers match these filters.",
+  "table": { "select": "Select", "name": "Connection name", "lastPath": "Last used path", "user": "User", "actions": "Actions" },
+  "actions": { "more": "More actions", "connect": "Connect", "connectNew": "Connect in a new session", "openSftp": "Open SFTP", "edit": "Edit", "favorite": "Add to favorites", "unfavorite": "Remove from favorites", "copyHost": "Copy host address", "delete": "Delete profile…", "selected": "Select {{name}} for batch connection", "isFavorite": "Favorite", "lastPathNotRecorded": "No remote path recorded" },
+  "status": { "connected": "Connected", "connecting": "Connecting" },
+  "footer": { "savedCount": "{{count}} saved servers", "usage": "Double-click or press Enter to connect · Right-click for actions", "clearRecent": "Clear recent history" },
+  "delete": { "title": "Delete this connection profile?", "description": "The local profile for {{name}} will be deleted. Saved system credentials and trusted host fingerprints will not be removed.", "activeSession": " The current SSH session will continue running. This profile will not be restored automatically after its tab closes.", "cancel": "Cancel", "confirm": "Delete profile" },
+  "toast": { "favoriteSaveFailed": "Could not update favorite status.", "deleteFailed": "Could not delete the server profile.", "hostCopied": "Copied {{host}}", "clipboardUnavailable": "Could not access the clipboard. Copy the host address manually.", "recentCleared": "Recent connection times cleared. Server profiles and credentials were kept.", "recentClearFailed": "Could not clear recent connection history.", "batchPaused": "Batch connection paused. Finish login verification for {{name}}, then start the remaining connections again.", "batchCompleted": "Processed {{count}} servers." }
+}

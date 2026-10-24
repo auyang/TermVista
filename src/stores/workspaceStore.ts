@@ -142,7 +142,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           if (existing) return { activeTabId: existing.id };
           const id = nextId();
           return {
-            tabs: [...state.tabs, { id, title: "新标签页", mode: "blank" }],
+            tabs: [...state.tabs, { id, title: "", mode: "blank" }],
             activeTabId: id,
           };
         });

@@ -1,0 +1,86 @@
+{
+  "title": "快速连接",
+  "subtitle": "双击连接，打开终端或浏览文件",
+  "manageConnections": "管理连接",
+  "loading": {
+    "aria": "正在读取服务器配置",
+    "screenReader": "正在读取本机服务器配置"
+  },
+  "loadError": {
+    "title": "无法读取本机连接配置",
+    "description": "配置数据库暂时不可用。已保存的连接没有被清除，可以重试读取。",
+    "retry": "重试"
+  },
+  "empty": {
+    "title": "还没有服务器连接",
+    "description": "添加 SSH 服务器配置后，它会显示在这里。连接密码和私钥口令可由本机加密保险库安全保管。",
+    "addSsh": "新增 SSH 连接"
+  },
+  "filter": {
+    "aria": "连接筛选",
+    "all": "全部",
+    "favorites": "收藏",
+    "recent": "最近"
+  },
+  "batch": {
+    "connectCount": "批量连接（{{count}}）",
+    "paused": "批量连接已暂停。请先完成“{{name}}”的登录验证，再重新启动剩余连接。",
+    "completed": "已处理 {{count}} 台服务器。",
+    "title": "批量连接服务器？",
+    "description": "将依次处理以下 {{count}} 台服务器。每台服务器仍会执行各自的主机密钥和凭据校验；遇到需要人工登录的服务器时会暂停。",
+    "start": "开始连接",
+    "maxSelected": "最多同时选择 3 台"
+  },
+  "search": {
+    "placeholder": "搜索名称、主机或用户",
+    "aria": "搜索连接"
+  },
+  "emptyFiltered": "没有符合筛选条件的服务器。",
+  "table": {
+    "select": "选择",
+    "name": "连接名称",
+    "lastPath": "上次使用路径",
+    "user": "用户",
+    "actions": "操作"
+  },
+  "actions": {
+    "more": "更多操作",
+    "connect": "连接",
+    "connectNew": "在新会话中连接",
+    "openSftp": "打开 SFTP",
+    "edit": "编辑",
+    "favorite": "收藏",
+    "unfavorite": "取消收藏",
+    "copyHost": "复制主机地址",
+    "delete": "删除配置…",
+    "selected": "选择 {{name}} 以批量连接",
+    "isFavorite": "已收藏",
+    "lastPathNotRecorded": "未记录远程路径"
+  },
+  "status": {
+    "connected": "已连接",
+    "connecting": "连接中"
+  },
+  "footer": {
+    "savedCount": "{{count}} 台已保存服务器",
+    "usage": "双击或按 Enter 连接 · 右键打开操作",
+    "clearRecent": "清除最近记录"
+  },
+  "delete": {
+    "title": "删除连接配置？",
+    "description": "将删除“{{name}}”的本机连接配置。保存的系统凭据与主机指纹不会因此删除。",
+    "activeSession": "当前 SSH 会话会继续运行；关闭标签后该配置不会再自动恢复。",
+    "cancel": "取消",
+    "confirm": "删除配置"
+  },
+  "toast": {
+    "favoriteSaveFailed": "无法保存收藏状态。",
+    "deleteFailed": "无法删除服务器配置。",
+    "hostCopied": "已复制 {{host}}",
+    "clipboardUnavailable": "无法访问剪贴板，请手动复制主机地址。",
+    "recentCleared": "最近连接时间已清除，服务器配置和凭据保持不变。",
+    "recentClearFailed": "无法清除最近连接记录。",
+    "batchPaused": "批量连接已暂停。请先完成“{{name}}”的登录验证，再重新启动剩余连接。",
+    "batchCompleted": "已处理 {{count}} 台服务器。"
+  }
+}

@@ -1,8 +1,12 @@
-name: PR 代码检查
+name: 代码检查
 
 on:
+  push:
+    branches:
+      - dev
   pull_request:
     branches:
+      - dev
       - main
   workflow_dispatch:
 

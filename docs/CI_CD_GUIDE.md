@@ -15,10 +15,19 @@
 
 ## 触发行为
 
-1. PR → `.github/workflows/ci.yml`：前端构建、可用的 lint/typecheck/test:ci、Rust fmt/check/test/clippy。
+1. push `dev` 或 PR 指向 `dev`/`main` → `.github/workflows/ci.yml`：前端构建、可用的 lint/typecheck/test:ci、Rust fmt/check/test/clippy。
 2. push main/master → 除 CI 外，执行 `desktop-build.yml` 跨平台打包并上传 Actions Artifacts。
 3. GitHub Actions UI → 手动触发 `desktop-build.yml`，可指定分支进行打包。
 4. 推送匹配 v* 的语义化版本标签 → `release.yml`；验证版本一致后构建并上传到 **Draft** GitHub Release。只有人工审查和发布后才对公众展示为正式 Release。
+
+## 分支流程（轻量 Git Flow）
+
+- `main` 保持可发布状态；GitHub 默认分支继续使用 `main`。
+- `dev` 是长期集成分支。小改动可直接提交到 `dev`；较大的功能可从 `dev` 创建短期 `feature/<name>` 分支，完成后合回 `dev`。
+- `dev` 的每次推送及指向 `dev`、`main` 的 PR 都运行完整代码检查。准备发布时，从 `dev` 向 `main` 提 PR，检查通过后再合并。
+- 合并到 `main` 后，统一版本号并推送 `v<version>` 标签，例如应用版本 `0.10.25` 对应标签 `v0.10.25`。Release 工作流只为匹配标签生成 Draft。
+- 紧急线上修复从 `main` 开 `hotfix/<name>`，修复并验证后合回 `main` 和 `dev`，再按版本发布。
+- 为阻止未通过检查的改动直接进入 `main`，需在 GitHub 的 `Settings → Branches` 为 `main` 配置 PR 与必需状态检查保护。
 
 ## 构建产物
 
@@ -99,7 +108,7 @@ git push origin v0.1.0
 - 默认分支：`main`。仓库此前没有 GitHub Actions 工作流，本次新增 `ci.yml`、`desktop-build.yml` 和 `release.yml`，没有覆盖已有配置。
 - 前端使用 Node.js 22、pnpm `10.32.1`；`package.json` 已固定 `packageManager`，`pnpm-lock.yaml` 为 lockfile v9 格式。
 - Rust 使用 stable；`src-tauri/Cargo.lock` 存在，CI 命令使用 `--locked`。Tauri `beforeBuildCommand` 为 `pnpm build`，前端产物目录为 `dist`。
-- `ci.yml` 在指向 `main` 的 PR 上执行 lint、typecheck、已有 `test:polish`、前端构建及 Rust fmt/check/test/clippy；它不申请写权限。
+- `ci.yml` 在 `dev` 推送以及指向 `dev`/`main` 的 PR 上执行 lint、typecheck、已有 `test:polish`、前端构建及 Rust fmt/check/test/clippy；它不申请写权限。
 - `desktop-build.yml` 在 `main` 更新时打包 macOS Apple Silicon、macOS Intel 和 Windows x64，也支持 Actions 手动触发并通过 `--ref` 选择分支。版本标签工作流通过 `workflow_call` 复用相同打包矩阵。
 - Actions 产物名称：`TermVista-macOS-Apple-Silicon`（DMG）、`TermVista-macOS-Intel`（DMG）、`TermVista-Windows-x64`（NSIS setup.exe）。主分支产物保留 7 天，Release 工作流的中间产物保留 2 天。
 - `release.yml` 只响应 `v*` 标签；构建前校验标签、`package.json`、`tauri.conf.json` 和 `Cargo.toml` 的版本一致。安装包上传到 Draft Release；不会自动发布为正式版本，也不会自动创建或移动 Git 标签。

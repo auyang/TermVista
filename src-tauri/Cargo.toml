@@ -1,6 +1,6 @@
 [package]
 name = "ai-ssh-studio"
-version = "0.1.0"
+version = "0.10.24"
 description = "TermVista（端境）：跨平台 SSH/SFTP 智能远程工作台"
 authors = ["you"]
 edition = "2024"

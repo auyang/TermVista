@@ -68,7 +68,7 @@ dependencies = [
 
 [[package]]
 name = "ai-ssh-studio"
-version = "0.1.0"
+version = "0.10.24"
 dependencies = [
  "aes-gcm",
  "argon2",

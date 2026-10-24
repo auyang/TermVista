@@ -2,7 +2,7 @@
   "name": "ai-ssh-studio",
   "description": "TermVista（端境）：跨平台 SSH/SFTP 智能远程工作台",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.10.24",
   "type": "module",
   "packageManager": "pnpm@10.32.1",
   "scripts": {
